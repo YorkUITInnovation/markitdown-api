@@ -1,0 +1,11 @@
+This is a sample text file.
+
+It contains multiple lines of text.
+Some formatting like **bold** and *italic*.
+
+Here's a list:
+- Item 1
+- Item 2
+- Item 3
+
+And a link: https://github.com/microsoft/markitdown
