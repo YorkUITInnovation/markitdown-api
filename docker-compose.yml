@@ -6,8 +6,8 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./docker_apikeys.env:/app/.env:ro  # Mount API keys file as read-only
-      - ./uploads:/app/uploads:ro  # Optional: for mounting local files
+      - ./markitdown/env/docker_apikeys.env:/app/.env:ro  # Mount API keys file as read-only
+      - ./markitdown/uploads:/app/uploads:ro  # Optional: for mounting local files
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]

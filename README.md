@@ -130,7 +130,8 @@ This API supports an extensive range of file types through Microsoft MarkItDown 
    docker run -d \
      --name markitdown-api \
      -p 8000:8000 \
-     -v ./docker_apikeys.env:/app/.env:ro \
+     -v ./markitdown/env/docker_apikeys.env:/app/.env:ro \
+     -v ./markitdown/uploads:/app/uploads:rw \
      markitdown-api
    ```
 
@@ -471,7 +472,8 @@ Once published, others can use your image:
 docker run -d \
   --name markitdown-api \
   -p 8000:8000 \
-  -v ./docker_apikeys.env:/app/.env:ro \
+  -v ./markitdown/env/docker_apikeys.env:/app/.env:ro \
+    -v ./markitdown/uploads:/app/uploads:rw \
   yourusername/markitdown-api:latest
 ```
 
@@ -483,7 +485,14 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./docker_apikeys.env:/app/.env:ro
+      - ./markitdown/env/docker_apikeys.env:/app/.env:ro
+      - ./markitdown/uploads:/app/uploads:rw
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 ```
 
 ### Build Script Commands
