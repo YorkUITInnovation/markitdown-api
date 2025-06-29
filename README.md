@@ -285,15 +285,6 @@ Visit `http://localhost:8000/docs` to access the interactive Swagger UI document
 - Use strong, unique API keys
 - Restart the server after changing API keys
 
-### Example .gitignore
-
-```gitignore
-.env
-__pycache__/
-*.pyc
-.venv/
-```
-
 ## Configuration
 
 ### Environment Variables
