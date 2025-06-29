@@ -410,3 +410,91 @@ For issues related to:
 - **Document conversion**: Check the [MarkItDown documentation](https://github.com/microsoft/markitdown)
 - **API functionality**: Create an issue in this repository
 - **FastAPI usage**: Refer to [FastAPI documentation](https://fastapi.tiangolo.com/)
+
+## Docker Hub Deployment
+
+### Prerequisites for Docker Hub
+- Docker Hub account (create one at [hub.docker.com](https://hub.docker.com))
+- Docker Desktop installed and running
+
+### Option 1: Automated Build & Push (Recommended)
+
+#### For Linux/macOS:
+```bash
+# 1. Edit build.sh and replace YOUR_DOCKERHUB_USERNAME with your actual username
+# 2. Make the script executable
+chmod +x build.sh
+
+# 3. Login to Docker Hub
+docker login
+
+# 4. Build and push to Docker Hub
+./build.sh build-push
+```
+
+#### For Windows (PowerShell):
+```powershell
+# 1. Edit build.ps1 and replace YOUR_DOCKERHUB_USERNAME with your actual username
+# 2. Login to Docker Hub
+docker login
+
+# 3. Build and push to Docker Hub
+.\build.ps1 build-push
+```
+
+### Option 2: Manual Docker Hub Deployment
+
+1. **Login to Docker Hub**
+   ```bash
+   docker login
+   ```
+
+2. **Build and tag your image**
+   ```bash
+   # Replace 'yourusername' with your Docker Hub username
+   docker build -t yourusername/markitdown-api:latest .
+   docker tag yourusername/markitdown-api:latest yourusername/markitdown-api:v1.0.0
+   ```
+
+3. **Push to Docker Hub**
+   ```bash
+   docker push yourusername/markitdown-api:latest
+   docker push yourusername/markitdown-api:v1.0.0
+   ```
+
+### Using Your Published Image
+
+Once published, others can use your image:
+
+```bash
+# Pull and run your published image
+docker run -d \
+  --name markitdown-api \
+  -p 8000:8000 \
+  -v ./docker_apikeys.env:/app/.env:ro \
+  yourusername/markitdown-api:latest
+```
+
+Or update docker-compose.yml to use your published image:
+```yaml
+services:
+  markitdown-api:
+    image: yourusername/markitdown-api:latest  # Use published image instead of build
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./docker_apikeys.env:/app/.env:ro
+```
+
+### Build Script Commands
+
+| Command | Description |
+|---------|-------------|
+| `build` | Build Docker image locally |
+| `push` | Push existing image to Docker Hub |
+| `build-push` | Build and push to Docker Hub |
+| `run` | Run container locally |
+| `stop` | Stop running container |
+| `clean` | Remove image and containers |
+
+

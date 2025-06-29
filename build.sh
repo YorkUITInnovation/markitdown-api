@@ -6,12 +6,16 @@
 set -e  # Exit on any error
 
 # Configuration
+DOCKER_HUB_USERNAME="YOUR_DOCKERHUB_USERNAME"  # Replace with your Docker Hub username
 IMAGE_NAME="markitdown-api"
 IMAGE_TAG="latest"
 # Additional tags (space-separated)
 ADDITIONAL_TAGS="v1.0.0 stable"
 CONTAINER_NAME="markitdown-api-container"
 PORT="8000"
+
+# Full image name for Docker Hub
+DOCKER_HUB_IMAGE="${DOCKER_HUB_USERNAME}/${IMAGE_NAME}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -72,18 +76,18 @@ EOF
 
 # Function to build the Docker image
 build_image() {
-    print_info "Building Docker image: ${IMAGE_NAME}:${IMAGE_TAG}"
+    print_info "Building Docker image: ${DOCKER_HUB_IMAGE}:${IMAGE_TAG}"
 
     # Build the main image
-    if docker build -t "${IMAGE_NAME}:${IMAGE_TAG}" .; then
+    if docker build -t "${DOCKER_HUB_IMAGE}:${IMAGE_TAG}" .; then
         print_success "Docker image built successfully with tag: ${IMAGE_TAG}"
 
         # Apply additional tags if specified
         if [ -n "$ADDITIONAL_TAGS" ]; then
             print_info "Applying additional tags..."
             for tag in $ADDITIONAL_TAGS; do
-                if docker tag "${IMAGE_NAME}:${IMAGE_TAG}" "${IMAGE_NAME}:${tag}"; then
-                    print_success "Tagged image as: ${IMAGE_NAME}:${tag}"
+                if docker tag "${DOCKER_HUB_IMAGE}:${IMAGE_TAG}" "${DOCKER_HUB_IMAGE}:${tag}"; then
+                    print_success "Tagged image as: ${DOCKER_HUB_IMAGE}:${tag}"
                 else
                     print_warning "Failed to apply tag: ${tag}"
                 fi
@@ -96,6 +100,31 @@ build_image() {
         print_error "Failed to build Docker image"
         exit 1
     fi
+}
+
+# Function to push to Docker Hub
+push_to_hub() {
+    print_info "Pushing to Docker Hub..."
+
+    # Check if logged in to Docker Hub
+    if ! docker info | grep -q "Username:"; then
+        print_warning "Not logged in to Docker Hub. Please run: docker login"
+        print_info "Attempting to login..."
+        docker login
+    fi
+
+    # Push main image
+    print_info "Pushing ${DOCKER_HUB_IMAGE}:${IMAGE_TAG}"
+    docker push "${DOCKER_HUB_IMAGE}:${IMAGE_TAG}"
+
+    # Push additional tags
+    for tag in $ADDITIONAL_TAGS; do
+        print_info "Pushing ${DOCKER_HUB_IMAGE}:${tag}"
+        docker push "${DOCKER_HUB_IMAGE}:${tag}"
+    done
+
+    print_success "Successfully pushed to Docker Hub!"
+    print_info "Your image is available at: https://hub.docker.com/r/${DOCKER_HUB_USERNAME}/${IMAGE_NAME}"
 }
 
 # Function to run the container
@@ -182,21 +211,18 @@ show_help() {
     echo "Usage: $0 [COMMAND]"
     echo ""
     echo "Commands:"
-    echo "  build     Build the Docker image"
-    echo "  run       Build and run the container"
-    echo "  start     Start the existing container"
-    echo "  stop      Stop the running container"
-    echo "  restart   Restart the container"
-    echo "  logs      Show container logs"
-    echo "  status    Show container status"
-    echo "  cleanup   Remove container and image"
-    echo "  help      Show this help message"
+    echo "  build          Build Docker image"
+    echo "  push           Push image to Docker Hub"
+    echo "  build-push     Build and push to Docker Hub"
+    echo "  run            Run container locally"
+    echo "  stop           Stop running container"
+    echo "  clean          Remove image and containers"
+    echo "  help           Show this help message"
     echo ""
     echo "Examples:"
-    echo "  $0 build     # Build the Docker image"
-    echo "  $0 run       # Build and run the container"
-    echo "  $0 logs      # Show container logs"
-    echo "  $0 cleanup   # Clean up everything"
+    echo "  $0 build-push     # Build and upload to Docker Hub"
+    echo "  $0 build         # Just build locally"
+    echo "  $0 push          # Push existing image to Docker Hub"
 }
 
 # Main script logic
@@ -206,19 +232,20 @@ case "${1:-help}" in
         check_env_file
         build_image
         ;;
+    push)
+        push_to_hub
+        ;;
+    build-push)
+        check_docker
+        check_env_file
+        build_image
+        push_to_hub
+        ;;
     run)
         check_docker
         check_env_file
         build_image
         run_container
-        ;;
-    start)
-        check_docker
-        if docker start "${CONTAINER_NAME}" 2>/dev/null; then
-            print_success "Container started"
-        else
-            print_error "Failed to start container. Try 'run' command first."
-        fi
         ;;
     stop)
         check_docker
