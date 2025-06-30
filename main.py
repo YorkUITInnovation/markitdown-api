@@ -1,6 +1,5 @@
-from fastapi import FastAPI, HTTPException, Depends, Security
+from fastapi import FastAPI, HTTPException, Depends, Security, UploadFile, File
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
 from pydantic import BaseModel
 from markitdown import MarkItDown
@@ -15,12 +14,23 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Application version
-API_VERSION = "1.0.0"
+API_VERSION = "1.1.0"
+
+# Environment configuration
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development").lower()
+DISABLE_DOCS = os.getenv("DISABLE_DOCS", "false").lower() == "true"
+
+# Determine if docs should be enabled
+# Disable docs in production or when explicitly disabled
+docs_enabled = ENVIRONMENT != "production" and not DISABLE_DOCS
 
 app = FastAPI(
     title="MarkItDown API",
     description="Convert files and URLs to Markdown using Microsoft MarkItDown",
-    version=API_VERSION
+    version=API_VERSION,
+    docs_url="/docs" if docs_enabled else None,
+    redoc_url="/redoc" if docs_enabled else None,
+    openapi_url="/openapi.json" if docs_enabled else None
 )
 
 # Initialize MarkItDown
@@ -55,6 +65,11 @@ class ConvertResponse(BaseModel):
     filename: str
     content: str
 
+class UploadResponse(BaseModel):
+    filename: str
+    content: str
+    file_size: int
+
 class VersionResponse(BaseModel):
     version: str
 
@@ -67,7 +82,7 @@ async def get_version():
     return VersionResponse(version=API_VERSION)
 
 @app.post("/convert",
-          summary="Convert file or URL to Markdown",
+          summary="Convert local file or URL to Markdown",
           description="Convert a file or URL to markdown using Microsoft MarkItDown. Requires valid API key.",
           dependencies=[Depends(verify_api_key)],
           responses={
@@ -158,6 +173,71 @@ async def convert_file(file_path: str) -> ConvertResponse:
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error converting file: {str(e)}")
+
+@app.post("/upload",
+          summary="Upload and convert file to Markdown",
+          description="Upload a file and convert it to markdown using Microsoft MarkItDown. Requires valid API key.",
+          dependencies=[Depends(verify_api_key)],
+          response_model=UploadResponse,
+          responses={
+              200: {"description": "Successfully uploaded and converted to markdown"},
+              401: {"description": "Invalid or missing API key"},
+              413: {"description": "File too large"},
+              422: {"description": "Invalid file type"},
+              500: {"description": "Conversion error"}
+          })
+async def upload_file(file: UploadFile = File(...), api_key: str = Depends(verify_api_key)):
+    """
+    Upload a file and convert it to markdown using Microsoft MarkItDown.
+    Accepts various file types supported by MarkItDown (PDF, DOCX, images, etc.).
+    Requires valid API key in Authorization header: Bearer <your-api-key>
+    """
+
+    # Check file size (limit to 50MB)
+    MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB in bytes
+
+    try:
+        # Read file content
+        file_content = await file.read()
+        file_size = len(file_content)
+
+        if file_size > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large. Maximum size is {MAX_FILE_SIZE // (1024*1024)}MB"
+            )
+
+        # Get filename without extension for display
+        filename = Path(file.filename or "uploaded_file").stem
+
+        # Create a temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=Path(file.filename or "").suffix) as temp_file:
+            temp_file.write(file_content)
+            temp_file_path = temp_file.name
+
+        try:
+            # Convert using MarkItDown
+            result = md.convert(temp_file_path)
+
+            # Ensure the content is properly encoded as UTF-8
+            content = result.text_content
+            if isinstance(content, bytes):
+                content = content.decode('utf-8', errors='replace')
+
+            return UploadResponse(
+                filename=filename,
+                content=content,
+                file_size=file_size
+            )
+
+        finally:
+            # Clean up temporary file
+            os.unlink(temp_file_path)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing uploaded file: {str(e)}")
 
 def get_filename_from_url(url: str, response: requests.Response) -> str:
     """Extract filename from URL or Content-Disposition header"""

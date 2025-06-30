@@ -1,191 +1,111 @@
 # MarkItDown API
 
-A FastAPI-based service that converts files and URLs to Markdown using Microsoft's MarkItDown library. This API provides a secure endpoint for converting various document formats to Markdown with API key authentication and version management.
-
-**Author:** Patrick Thibaudeau (thibaud@yorku.ca)  
-**Built by:** UIT IT Innovation & Academic Technologies, York University
+A FastAPI-based web service that converts files and URLs to Markdown using Microsoft's MarkItDown library.
 
 ## Features
 
-- 🔄 **Universal File Conversion**: Convert documents, presentations, spreadsheets, PDFs, images, audio files, and more to Markdown
-- 🌐 **URL Support**: Download and convert files directly from HTTP/HTTPS URLs
-- 🔐 **API Key Authentication**: Secure access with Bearer token authentication
-- 🌍 **UTF-8 Encoding**: Proper handling of international characters and various encodings
-- 📚 **Interactive Documentation**: Built-in Swagger UI for easy testing
-- ⚡ **Fast Processing**: Efficient conversion using Microsoft MarkItDown with full dependency support
-- 🏷️ **Version Management**: Built-in version endpoint for API version tracking
-- 🎵 **Audio Processing**: Speech-to-text conversion for audio files
-- 📊 **Advanced Analytics**: Enhanced Excel and data file processing with pandas
-- 🎥 **YouTube Support**: Extract and convert YouTube video transcripts
-- ☁️ **Azure Integration**: Support for Azure Document Intelligence
-
-## Supported File Types
-
-This API supports an extensive range of file types through Microsoft MarkItDown with full dependencies:
-
-### Documents & Office Files
-- **Microsoft Office**: DOCX, PPTX, XLSX (with advanced formatting preservation)
-- **PDFs**: Enhanced PDF processing with pdfminer-six
-- **Legacy Office**: XLS files with xlrd support
-
-### Web & Markup
-- **Web Content**: HTML, XML with advanced parsing
-- **YouTube**: Video transcript extraction
-
-### Images & Media
-- **Images**: PNG, JPG, GIF (with OCR capabilities via Pillow)
-- **Audio Files**: WAV, MP3, etc. (with speech recognition)
-
-### Data & Text
-- **Data Files**: CSV, Excel with pandas integration
-- **Text Files**: TXT, MD, and various text formats
-
-### Cloud & Enterprise
-- **Azure Documents**: Integration with Azure Document Intelligence
-- **SharePoint**: Enhanced support for enterprise document systems
+- **File Upload & Conversion**: Upload files directly and convert them to Markdown
+- **URL Conversion**: Convert web pages and online documents to Markdown
+- **Multiple File Formats**: Supports PDF, Word documents, PowerPoint, Excel, images, and more
+- **Secure API**: API key authentication for all conversion endpoints
+- **Production Security**: Automatic documentation disabling in production environments
+- **Auto-reload**: Development server with automatic reloading
+- **Interactive Documentation**: Built-in Swagger UI and ReDoc documentation (development only)
 
 ## Installation
 
-### Prerequisites
-
-- Python 3.11 or higher (recommended)
-- pip package manager
-
-### Option 1: Local Installation
-
-1. **Clone or download the project**
-   ```bash
-   git clone <your-repo-url>
-   cd markitdown-api
-   ```
-
-2. **Create a virtual environment** (recommended)
-   ```bash
-   python -m venv .venv
-   .venv\Scripts\activate  # On Windows
-   # source .venv/bin/activate  # On macOS/Linux
-   ```
-
-3. **Install dependencies with full capabilities**
-   ```bash
-   pip install -r requirements.txt
-   ```
-   
-   This installs `markitdown[all]` which includes all optional dependencies for maximum functionality.
-
-4. **Configure API keys**
-   
-   Create a `.env` file in the project root:
-   ```env
-   # API Keys for MarkItDown API
-   # Add your API keys here, separated by commas
-   API_KEYS=your-secret-api-key-1,your-secret-api-key-2,another-api-key-here
-   ```
-
-5. **Start the server**
-   ```bash
-   uvicorn main:app --reload --host 0.0.0.0 --port 8000
-   ```
-
-### Option 2: Docker Installation (Recommended)
-
-#### Prerequisites
-- Docker
-- Docker Compose (optional but recommended)
-
-#### Quick Start with Docker Compose
-
-1. **Clone the project**
-   ```bash
-   git clone <your-repo-url>
-   cd markitdown-api
-   ```
-
-2. **Configure API keys for Docker**
-   
-   Edit the `docker_apikeys.env` file:
-   ```env
-   API_KEYS=your-secret-api-key-1,your-secret-api-key-2,another-api-key-here
-   ```
-
-3. **Start the service**
-   ```bash
-   docker-compose up -d
-   ```
-
-4. **Check the logs**
-   ```bash
-   docker-compose logs -f
-   ```
-
-#### Manual Docker Build
-
-1. **Build the image**
-   ```bash
-   docker build -t markitdown-api .
-   ```
-
-2. **Run the container with volume-mounted API keys**
-   ```bash
-   docker run -d \
-     --name markitdown-api \
-     -p 8000:8000 \
-     -v ./markitdown/env/docker_apikeys.env:/app/.env:ro \
-     -v ./markitdown/uploads:/app/uploads:rw \
-     markitdown-api
-   ```
-
-#### Docker API Keys Configuration
-
-The Docker setup uses a volume-mounted configuration file instead of environment variables for better security:
-
-- **Local development**: Use `.env` file
-- **Docker deployment**: Use `docker_apikeys.env` file (volume-mounted as read-only)
-
-This approach ensures:
-- API keys are not baked into the Docker image
-- Keys can be updated without rebuilding the container
-- Separate configuration for different deployment environments
-
-### Docker Management Commands
-
+1. Clone the repository:
 ```bash
-# View running containers
-docker ps
-
-# View logs
-docker logs markitdown-api
-
-# Stop the container
-docker stop markitdown-api
-
-# Remove the container
-docker rm markitdown-api
-
-# Using docker-compose
-docker-compose up -d      # Start in background
-docker-compose down       # Stop and remove
-docker-compose logs -f    # Follow logs
-docker-compose restart    # Restart services
+git clone git@github.com:YorkUITInnovation/markitdown-api.git
+cd markitdown-api
 ```
 
-The API will be available at `http://localhost:8000`
-
-## Usage
-
-### Authentication
-
-All API requests require a valid API key in the Authorization header:
-
-```
-Authorization: Bearer your-api-key-here
+2. Create a virtual environment:
+```bash
+python -m venv .venv
+.venv\Scripts\activate  # Windows
+# or
+source .venv/bin/activate  # Linux/Mac
 ```
 
-### API Endpoints
+3. Install dependencies:
+```bash
+pip install -r requirements.txt
 
-#### GET `/version`
+# For PDF support (required for PDF files):
+pip install markitdown[pdf]
 
-Get the current API version (no authentication required).
+# Or install all optional dependencies:
+pip install markitdown[all]
+```
+
+4. Create a `.env` file with your API keys:
+```env
+# Required: API keys for authentication
+API_KEYS=your-api-key-1,your-api-key-2,your-api-key-3
+
+# Optional: Environment configuration (default: development)
+ENVIRONMENT=development
+
+# Optional: Force disable docs regardless of environment (default: false)
+DISABLE_DOCS=false
+```
+
+## Environment Configuration
+
+The API supports different environment modes for enhanced security:
+
+### Development Mode (Default)
+- API documentation available at `/docs` and `/redoc`
+- OpenAPI schema accessible at `/openapi.json`
+- Ideal for development and testing
+
+```env
+ENVIRONMENT=development  # or omit this line
+API_KEYS=your-api-keys-here
+```
+
+### Production Mode
+- **Security Enhanced**: API documentation endpoints are automatically disabled
+- No access to `/docs`, `/redoc`, or `/openapi.json`
+- Reduces attack surface and prevents schema exposure
+
+```env
+ENVIRONMENT=production
+API_KEYS=your-api-keys-here
+```
+
+### Manual Documentation Control
+Force disable documentation regardless of environment:
+
+```env
+DISABLE_DOCS=true
+API_KEYS=your-api-keys-here
+```
+
+## Running the Server
+
+Start the development server:
+```bash
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+The API will be available at:
+- **API Base URL**: http://localhost:8000
+- **Interactive Documentation**: http://localhost:8000/docs
+- **Alternative Documentation**: http://localhost:8000/redoc
+
+## API Endpoints
+
+### 1. Get API Version
+**GET** `/version`
+
+Returns the current API version.
+
+**Example:**
+```bash
+curl http://localhost:8000/version
+```
 
 **Response:**
 ```json
@@ -194,316 +114,192 @@ Get the current API version (no authentication required).
 }
 ```
 
-#### POST `/convert`
+### 2. Convert URL to Markdown
+**POST** `/convert`
 
-Convert a file or URL to Markdown format.
+Convert a web page or online document to Markdown format.
 
-#### Request Body
+**Headers:**
+- `Authorization: Bearer YOUR_API_KEY`
+- `Content-Type: application/json`
 
+**Request Body:**
 ```json
 {
-  "source": "path/to/file.pdf"
+  "url": "https://example.com/document.pdf"
 }
 ```
 
-or
-
-```json
-{
-  "source": "https://example.com/document.docx"
-}
-```
-
-#### Response
-
-```json
-{
-  "filename": "document",
-  "content": "# Converted Markdown Content\n\nYour document content here..."
-}
-```
-
-### Example Requests
-
-#### Using curl with local file:
+**Example:**
 ```bash
 curl -X POST "http://localhost:8000/convert" \
-     -H "Content-Type: application/json" \
-     -H "Authorization: Bearer your-api-key" \
-     -d '{"source": "/path/to/document.pdf"}'
+  -H "Authorization: Bearer your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com/page"}'
 ```
 
-#### Using curl with URL:
-```bash
-curl -X POST "http://localhost:8000/convert" \
-     -H "Content-Type: application/json" \
-     -H "Authorization: Bearer your-api-key" \
-     -d '{"source": "https://example.com/presentation.pptx"}'
-```
-
-#### Using Python requests:
-```python
-import requests
-
-url = "http://localhost:8000/convert"
-headers = {
-    "Content-Type": "application/json",
-    "Authorization": "Bearer your-api-key"
+**Response:**
+```json
+{
+  "markdown": "# Page Title\n\nContent converted to markdown...",
+  "url": "https://example.com/page"
 }
-data = {
-    "source": "https://example.com/document.pdf"
-}
-
-response = requests.post(url, json=data, headers=headers)
-result = response.json()
-
-print(f"Filename: {result['filename']}")
-print(f"Content: {result['content']}")
 ```
 
-## Interactive Documentation
+### 3. Upload and Convert File
+**POST** `/upload`
 
-Visit `http://localhost:8000/docs` to access the interactive Swagger UI documentation where you can:
+Upload a file and convert it to Markdown format.
 
-1. Click the **"Authorize"** button
-2. Enter your API key
-3. Test the `/convert` endpoint directly in your browser
+**Headers:**
+- `Authorization: Bearer YOUR_API_KEY`
 
-## API Response Codes
+**Form Data:**
+- `file`: The file to upload and convert
 
-- **200**: Successful conversion
-- **400**: Bad request (invalid URL, download error)
-- **401**: Unauthorized (invalid or missing API key)
-- **404**: File not found
-- **500**: Internal server error (conversion failure)
+**Supported File Types:**
+- PDF files (`.pdf`)
+- Microsoft Word documents (`.docx`, `.doc`)
+- Microsoft PowerPoint presentations (`.pptx`, `.ppt`)
+- Microsoft Excel spreadsheets (`.xlsx`, `.xls`)
+- Images with text (`.png`, `.jpg`, `.jpeg`, `.gif`, `.bmp`)
+- HTML files (`.html`, `.htm`)
+- Text files (`.txt`, `.md`)
+- And many more formats supported by MarkItDown
 
-## Security
+**Example using curl:**
+```bash
+curl -X POST "http://localhost:8000/upload" \
+  -H "Authorization: Bearer your-api-key" \
+  -F "file=@document.pdf"
+```
 
-### API Key Management
+**Example using JavaScript:**
+```javascript
+const formData = new FormData();
+formData.append('file', fileInput.files[0]);
 
-- Store API keys securely in the `.env` file
-- Never commit the `.env` file to version control
-- Use strong, unique API keys
-- Restart the server after changing API keys
+fetch('http://localhost:8000/upload', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer your-api-key'
+  },
+  body: formData
+})
+.then(response => response.json())
+.then(data => console.log(data));
+```
 
-## Configuration
+**Response:**
+```json
+{
+  "markdown": "# Document Title\n\nConverted content in markdown format...",
+  "filename": "document.pdf",
+  "file_size": 1024576
+}
+```
 
-### Environment Variables
+## Error Responses
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `API_KEYS` | Comma-separated list of valid API keys | `key1,key2,key3` |
+All endpoints may return these error responses:
 
-### Server Configuration
+### 401 Unauthorized
+```json
+{
+  "detail": "Invalid API key"
+}
+```
 
-You can customize the server startup:
+### 400 Bad Request
+```json
+{
+  "detail": "Error message describing the issue"
+}
+```
+
+### 422 Validation Error
+```json
+{
+  "detail": [
+    {
+      "loc": ["body", "field"],
+      "msg": "field required",
+      "type": "value_error.missing"
+    }
+  ]
+}
+```
+
+## Docker Support
+
+### Using Docker Compose
+
+1. Create your API keys file:
+```bash
+cp docker_apikeys.env.example docker_apikeys.env
+# Edit docker_apikeys.env with your API keys
+```
+
+2. Run with Docker Compose:
+```bash
+docker-compose up -d
+```
+
+### Using Docker directly
 
 ```bash
-# Custom port
-uvicorn main:app --reload --port 8080
+# Build the image
+docker build -t markitdown-api .
 
-# Custom host (for external access)
-uvicorn main:app --reload --host 0.0.0.0
-
-# Production mode (no auto-reload)
-uvicorn main:app --host 0.0.0.0 --port 8000
+# Run the container
+docker run -d -p 8000:8000 --env-file docker_apikeys.env markitdown-api
 ```
 
-## File Structure
+## Development
 
+### Project Structure
 ```
 markitdown-api/
-├── main.py              # Main FastAPI application
-├── .env                 # Environment variables for local development
-├── docker_apikeys.env   # API keys for Docker deployment
-├── README.md           # This file
-├── requirements.txt    # Python dependencies with markitdown[all]
-├── Dockerfile          # Docker image configuration
-├── docker-compose.yml  # Docker Compose configuration
-├── build.sh            # Build script
-├── sample.txt          # Sample file for testing
-├── test_main.http      # HTTP test file
-└── __pycache__/        # Python cache directory
+├── main.py                 # FastAPI application
+├── requirements.txt        # Python dependencies
+├── .env                   # Environment variables (create this)
+├── docker-compose.yml     # Docker Compose configuration
+├── Dockerfile            # Docker image configuration
+├── docker_apikeys.env    # Docker environment file
+├── test_main.http        # HTTP test requests
+└── README.md            # This file
 ```
+
+### Testing
+
+Use the provided `test_main.http` file with your HTTP client, or test directly in the browser using the interactive documentation at http://localhost:8000/docs.
 
 ## Dependencies
 
-### Core Dependencies
-- **FastAPI**: Modern web framework for building APIs
-- **MarkItDown[all]**: Microsoft's document-to-markdown converter with all optional dependencies
-- **Requests**: HTTP library for downloading URLs
-- **python-dotenv**: Environment variable management
-- **Uvicorn[standard]**: ASGI server for running FastAPI with enhanced features
-
-### Enhanced Capabilities (included with markitdown[all])
-- **openpyxl**: Excel file processing (.xlsx)
-- **xlrd**: Legacy Excel file support (.xls)
-- **pandas**: Advanced data analysis and CSV processing
-- **mammoth**: Enhanced Word document conversion (.docx)
-- **python-pptx**: PowerPoint presentation processing
-- **pdfminer-six**: Advanced PDF text extraction
-- **Pillow**: Image processing and OCR capabilities
-- **pydub**: Audio file processing
-- **speechrecognition**: Speech-to-text conversion
-- **lxml**: Enhanced XML/HTML parsing
-- **youtube-transcript-api**: YouTube video transcript extraction
-- **azure-ai-documentintelligence**: Azure Document Intelligence integration
-- **azure-identity**: Azure authentication support
-
-### Additional Dependencies
-- **beautifulsoup4**: Web content parsing
-- **defusedxml**: Secure XML processing
-- **magika**: File type detection
-- **markdownify**: HTML to Markdown conversion
-
-## Troubleshooting
-
-### Common Issues
-
-1. **"No API keys configured" error**
-   - Ensure your `.env` file exists and contains `API_KEYS=...`
-   - Restart the server after creating/modifying `.env`
-
-2. **401 Unauthorized responses**
-   - Check that your API key is correct
-   - Ensure the Authorization header format: `Bearer your-key`
-
-3. **File not found errors**
-   - Use absolute file paths for local files
-   - Ensure the file exists and is readable
-
-4. **URL download failures**
-   - Check that the URL is accessible
-   - Some servers may block requests; the API includes a User-Agent header
-
-5. **"MissingDependencyException" errors**
-   - Ensure you installed with `pip install -r requirements.txt`
-   - The requirements.txt includes `markitdown[all]` for full functionality
-   - If issues persist, try: `pip uninstall markitdown` then `pip install "markitdown[all]"`
-
-6. **Audio processing issues**
-   - Ensure your system has the necessary audio codecs
-   - Some audio formats may require additional system-level dependencies
-
-### Development
-
-To run in development mode with detailed logging:
-
-```bash
-uvicorn main:app --reload --log-level debug
-```
+- **FastAPI**: Modern, fast web framework for building APIs
+- **MarkItDown**: Microsoft's library for converting various file formats to Markdown
+- **Uvicorn**: ASGI server for running the FastAPI application
+- **python-dotenv**: For loading environment variables
+- **aiofiles**: For async file operations
+- **pdfminer-six**: For PDF processing support
+- **cryptography**: Required for PDF processing
 
 ## License
 
-This project uses Microsoft MarkItDown library. Please refer to the [MarkItDown repository](https://github.com/microsoft/markitdown) for licensing information.
+This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## Contributing
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Test thoroughly
+4. Add tests if applicable
 5. Submit a pull request
 
 ## Support
 
-For issues related to:
-- **Document conversion**: Check the [MarkItDown documentation](https://github.com/microsoft/markitdown)
-- **API functionality**: Create an issue in this repository
-- **FastAPI usage**: Refer to [FastAPI documentation](https://fastapi.tiangolo.com/)
-
-## Docker Hub Deployment
-
-### Prerequisites for Docker Hub
-- Docker Hub account (create one at [hub.docker.com](https://hub.docker.com))
-- Docker Desktop installed and running
-
-### Option 1: Automated Build & Push (Recommended)
-
-#### For Linux/macOS:
-```bash
-# 1. Edit build.sh and replace YOUR_DOCKERHUB_USERNAME with your actual username
-# 2. Make the script executable
-chmod +x build.sh
-
-# 3. Login to Docker Hub
-docker login
-
-# 4. Build and push to Docker Hub
-./build.sh build-push
-```
-
-#### For Windows (PowerShell):
-```powershell
-# 1. Edit build.ps1 and replace YOUR_DOCKERHUB_USERNAME with your actual username
-# 2. Login to Docker Hub
-docker login
-
-# 3. Build and push to Docker Hub
-.\build.ps1 build-push
-```
-
-### Option 2: Manual Docker Hub Deployment
-
-1. **Login to Docker Hub**
-   ```bash
-   docker login
-   ```
-
-2. **Build and tag your image**
-   ```bash
-   # Replace 'yourusername' with your Docker Hub username
-   docker build -t yourusername/markitdown-api:latest .
-   docker tag yourusername/markitdown-api:latest yourusername/markitdown-api:v1.0.0
-   ```
-
-3. **Push to Docker Hub**
-   ```bash
-   docker push yourusername/markitdown-api:latest
-   docker push yourusername/markitdown-api:v1.0.0
-   ```
-
-### Using Your Published Image
-
-Once published, others can use your image:
-
-```bash
-# Pull and run your published image
-docker run -d \
-  --name markitdown-api \
-  -p 8000:8000 \
-  -v ./markitdown/env/docker_apikeys.env:/app/.env:ro \
-    -v ./markitdown/uploads:/app/uploads:rw \
-  yourusername/markitdown-api:latest
-```
-
-Or update docker-compose.yml to use your published image:
-```yaml
-services:
-  markitdown-api:
-    image: yourusername/markitdown-api:latest  # Use published image instead of build
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./markitdown/env/docker_apikeys.env:/app/.env:ro
-      - ./markitdown/uploads:/app/uploads:rw
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-```
-
-### Build Script Commands
-
-| Command | Description |
-|---------|-------------|
-| `build` | Build Docker image locally |
-| `push` | Push existing image to Docker Hub |
-| `build-push` | Build and push to Docker Hub |
-| `run` | Run container locally |
-| `stop` | Stop running container |
-| `clean` | Remove image and containers |
-
-
+For issues and questions:
+1. Check the interactive documentation at `/docs`
+2. Review the error messages for troubleshooting
+3. Ensure all required dependencies are installed
+4. Verify your API keys are correctly configured
