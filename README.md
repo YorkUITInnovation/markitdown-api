@@ -49,6 +49,9 @@ ENVIRONMENT=development
 
 # Optional: Force disable docs regardless of environment (default: false)
 DISABLE_DOCS=false
+
+# Optional: Maximum upload file size in MB (default: 100MB)
+MAX_UPLOAD_SIZE_MB=100
 ```
 
 ## Environment Configuration
@@ -82,6 +85,57 @@ Force disable documentation regardless of environment:
 DISABLE_DOCS=true
 API_KEYS=your-api-keys-here
 ```
+
+## File Upload Configuration
+
+The API supports configurable file upload limits to accommodate different use cases and server capacities.
+
+### Default Upload Limit
+By default, the maximum file upload size is set to **100MB**. This provides a good balance between functionality and server resource usage.
+
+### Custom Upload Limits
+You can configure the maximum upload size using the `MAX_UPLOAD_SIZE_MB` environment variable:
+
+```env
+# Examples of different upload limits
+MAX_UPLOAD_SIZE_MB=50    # 50MB - for smaller deployments
+MAX_UPLOAD_SIZE_MB=200   # 200MB - for medium files
+MAX_UPLOAD_SIZE_MB=500   # 500MB - for large documents
+MAX_UPLOAD_SIZE_MB=1000  # 1GB - for enterprise use
+```
+
+### Environment-Specific Configuration
+
+#### Development Environment
+```env
+ENVIRONMENT=development
+MAX_UPLOAD_SIZE_MB=200
+API_KEYS=your-api-keys-here
+```
+
+#### Production Environment
+```env
+ENVIRONMENT=production
+MAX_UPLOAD_SIZE_MB=100
+API_KEYS=your-api-keys-here
+```
+
+#### Docker Configuration
+Add to your `docker_apikeys.env` file:
+```env
+MAX_UPLOAD_SIZE_MB=500
+ENVIRONMENT=production
+API_KEYS=your-api-keys-here
+```
+
+### Upload Limit Considerations
+
+- **Server Resources**: Larger limits require more RAM and disk space
+- **Processing Time**: Bigger files take longer to process
+- **Network Bandwidth**: Consider your network capacity for large uploads
+- **Use Case**: Match the limit to your typical file sizes
+
+When a file exceeds the configured limit, the API returns a `413 Payload Too Large` error with the current size limit.
 
 ## Running the Server
 

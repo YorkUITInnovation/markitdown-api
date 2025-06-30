@@ -14,11 +14,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Application version
-API_VERSION = "1.1.0"
+API_VERSION = "1.1.1"
 
 # Environment configuration
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development").lower()
 DISABLE_DOCS = os.getenv("DISABLE_DOCS", "false").lower() == "true"
+
+# File upload configuration
+MAX_UPLOAD_SIZE_MB = int(os.getenv("MAX_UPLOAD_SIZE_MB", "100"))  # Default 100MB
 
 # Determine if docs should be enabled
 # Disable docs in production or when explicitly disabled
@@ -193,8 +196,8 @@ async def upload_file(file: UploadFile = File(...), api_key: str = Depends(verif
     Requires valid API key in Authorization header: Bearer <your-api-key>
     """
 
-    # Check file size (limit to 50MB)
-    MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB in bytes
+    # Check file size (limit to 100MB)
+    MAX_FILE_SIZE = MAX_UPLOAD_SIZE_MB * 1024 * 1024  # Convert MB to bytes
 
     try:
         # Read file content
@@ -204,7 +207,7 @@ async def upload_file(file: UploadFile = File(...), api_key: str = Depends(verif
         if file_size > MAX_FILE_SIZE:
             raise HTTPException(
                 status_code=413,
-                detail=f"File too large. Maximum size is {MAX_FILE_SIZE // (1024*1024)}MB"
+                detail=f"File too large. Maximum size is {MAX_UPLOAD_SIZE_MB}MB"
             )
 
         # Get filename without extension for display
