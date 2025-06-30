@@ -9,7 +9,7 @@ env_path = main_dir / ".env"
 load_dotenv(env_path)
 
 # Application version
-API_VERSION = "1.1.1"
+API_VERSION = "1.2.0"
 
 # Environment configuration
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development").lower()
