@@ -2,16 +2,29 @@ version: '3.8'
 
 services:
   markitdown-api:
-    build: .
+    image: uitadmin/markitdown-api:latest
+    container_name: markitdown-api
     ports:
       - "8000:8000"
+    env_file:
+      - docker_apikeys.env
     volumes:
-      - ./markitdown/env/docker_apikeys.env:/app/.env:ro  # Mount API keys file as read-only
-      - ./markitdown/uploads:/app/uploads:ro  # Optional: for mounting local files
+      # Persist extracted images (required for image processing)
+      - ./markitdown/images:/static/images
+      # Optional: persist uploads directory
+      - ./markitdown/uploads:/app/uploads
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/version"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'

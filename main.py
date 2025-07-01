@@ -19,9 +19,26 @@ app = FastAPI(
 )
 
 # Mount static files for serving extracted images
-static_dir = Path("static")
-static_dir.mkdir(exist_ok=True)
-app.mount("/images", StaticFiles(directory="static/images"), name="images")
+# Use root-level directory to avoid permission issues
+static_dir = Path("/static")
+images_dir = static_dir / "images"
+
+# Create directories with proper error handling
+try:
+    static_dir.mkdir(mode=0o755, exist_ok=True)
+    images_dir.mkdir(mode=0o755, exist_ok=True)
+    print(f"Using static directory: {static_dir}")
+except PermissionError:
+    # If we can't create in the root directory, fall back to /tmp
+    import tempfile
+    temp_static = Path(tempfile.gettempdir()) / "markitdown_static"
+    temp_images = temp_static / "images"
+    temp_static.mkdir(mode=0o755, exist_ok=True)
+    temp_images.mkdir(mode=0o755, exist_ok=True)
+    print(f"Warning: Using temporary directory for static files: {temp_static}")
+    app.mount("/images", StaticFiles(directory=str(temp_images)), name="images")
+else:
+    app.mount("/images", StaticFiles(directory="/static/images"), name="images")
 
 @app.get("/version",
          summary="Get API version",

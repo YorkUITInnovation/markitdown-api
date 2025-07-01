@@ -376,7 +376,7 @@ All endpoints may return these error responses:
 
 ## Docker Support
 
-### Using Docker Compose
+### Using Docker Compose (Recommended)
 
 1. Create your API keys file:
 ```bash
@@ -384,9 +384,29 @@ cp docker_apikeys.env.example docker_apikeys.env
 # Edit docker_apikeys.env with your API keys
 ```
 
-2. Run with Docker Compose:
+2. Create the required directories and set permissions:
+```bash
+# Create directories for persistent storage
+mkdir -p markitdown/images markitdown/uploads
+
+# Set proper ownership (999 is the container's appuser UID)
+sudo chown -R 999:999 markitdown
+
+# Set proper permissions
+sudo chmod -R 775 markitdown
+```
+
+3. Run with Docker Compose:
 ```bash
 docker-compose up -d
+```
+
+**Docker Compose Configuration:**
+The `docker-compose.yml` file includes the proper volume mapping:
+```yaml
+volumes:
+  - ./markitdown/images:/static/images  # Persist extracted images
+  - ./markitdown/uploads:/app/uploads   # Optional: persist uploads
 ```
 
 ### Using Docker directly
@@ -395,9 +415,28 @@ docker-compose up -d
 # Build the image
 docker build -t markitdown-api .
 
-# Run the container
-docker run -d -p 8000:8000 --env-file docker_apikeys.env markitdown-api
+# Create directories and set permissions
+mkdir -p markitdown/images markitdown/uploads
+sudo chown -R 999:999 markitdown
+sudo chmod -R 775 markitdown
+
+# Run the container with proper volume mounting
+docker run -d \
+  -p 8000:8000 \
+  -v $(pwd)/markitdown/images:/static/images \
+  -v $(pwd)/markitdown/uploads:/app/uploads \
+  --env-file docker_apikeys.env \
+  --name markitdown-api \
+  --restart unless-stopped \
+  markitdown-api
 ```
+
+### Important Notes for Docker Deployment
+
+- **Volume Mounting**: The `/static/images` directory inside the container must be mounted to persist extracted images
+- **Permissions**: The container runs as user ID 999 (`appuser`), so host directories must be owned by this user
+- **Directory Structure**: Use `./markitdown/images` and `./markitdown/uploads` on the host for organization
+- **Health Checks**: The container includes built-in health monitoring via the `/version` endpoint
 
 ## Development
 

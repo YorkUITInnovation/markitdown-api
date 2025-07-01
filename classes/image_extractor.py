@@ -15,13 +15,33 @@ from classes.models import ImageInfo
 class ImageExtractor:
     """Extract images from various document types and save them to accessible folders"""
 
-    def __init__(self, base_url: str = "http://localhost:8000", images_dir: str = "static/images"):
+    def __init__(self, base_url: str = "http://localhost:8000", images_dir: str = "/static/images"):
         self.base_url = base_url.rstrip('/')
         self.images_dir = Path(images_dir)
-        self.images_dir.mkdir(parents=True, exist_ok=True)
+        # Don't create directory immediately - do it lazily when first needed
+
+    def _ensure_images_dir_exists(self):
+        """Ensure the images directory exists, create if necessary"""
+        try:
+            self.images_dir.mkdir(parents=True, exist_ok=True, mode=0o755)
+        except PermissionError:
+            # If we can't create the directory, try to use a temporary location
+            # This should align with the fallback used in main.py
+            import tempfile
+            temp_dir = Path(tempfile.gettempdir()) / "markitdown_static" / "images"
+            temp_dir.mkdir(parents=True, exist_ok=True, mode=0o755)
+
+            # Update the base_url to reflect the temporary directory
+            old_images_dir = self.images_dir
+            self.images_dir = temp_dir
+            print(f"Warning: Could not create {old_images_dir}, using temporary directory: {temp_dir}")
+            print(f"Images will be served from temporary location")
 
     def extract_images_from_file(self, file_path: str, document_name: str) -> List[ImageInfo]:
         """Extract images from a file based on its extension"""
+        # Ensure directory exists before extraction
+        self._ensure_images_dir_exists()
+
         file_path = Path(file_path)
         document_folder = self._create_document_folder(document_name)
 
