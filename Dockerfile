@@ -28,6 +28,8 @@ RUN apt-get update && apt-get install -y \
     curl \
     # Add ffmpeg for audio/video processing
     ffmpeg \
+    # Add cron for potential scheduling (though we use Python scheduler)
+    cron \
     # Clean up to reduce image size
     && rm -rf /var/lib/apt/lists/*
 
@@ -37,25 +39,30 @@ RUN useradd --create-home --shell /bin/bash appuser
 # Copy requirements first for better Docker layer caching
 COPY requirements.txt .
 
-# Install Python dependencies
+# Install Python dependencies including new scheduler dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt && \
     # Install additional dependencies for full functionality
     pip install --no-cache-dir markitdown[all] && \
     # Install additional image processing libraries
-    pip install --no-cache-dir Pillow PyMuPDF python-docx
+    pip install --no-cache-dir Pillow PyMuPDF python-docx && \
+    # Ensure scheduling dependencies are installed
+    pip install --no-cache-dir schedule python-dotenv
 
 # Copy application code
 COPY . .
 
 # Create directories for static files and uploads with proper ownership
-# Updated to use root-level /static directory instead of app-relative path
+# Updated to use root-level /static directory for image cleanup system
 RUN mkdir -p /static/images && \
     mkdir -p /app/uploads && \
+    mkdir -p /app/logs && \
     chown -R appuser:appuser /app && \
     chown -R appuser:appuser /static && \
     chmod -R 755 /app && \
-    chmod -R 755 /static
+    chmod -R 755 /static && \
+    # Ensure appuser can write to images directory for cleanup operations
+    chmod -R 775 /static/images
 
 # Switch to non-root user
 USER appuser
@@ -64,13 +71,17 @@ USER appuser
 EXPOSE 8000
 
 # Health check to ensure the application is running properly
+# Updated to include cleanup status monitoring
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/version || exit 1
 
-# Set environment variables
+# Set environment variables for optimal container operation
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 ENV ENVIRONMENT=production
+# Default cleanup configuration (can be overridden)
+ENV IMAGE_CLEANUP_DAYS=7
+ENV IMAGE_CLEANUP_TIME=02:00
 
-# Run the application
+# Run the application with image cleanup scheduler
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

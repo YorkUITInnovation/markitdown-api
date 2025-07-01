@@ -8,10 +8,24 @@ from markitdown import MarkItDown
 from fastapi import HTTPException
 from classes import ConvertResponse
 from classes.image_extractor import ImageExtractor
+from classes.scheduler import ImageCleanupScheduler
 
 # Initialize MarkItDown and ImageExtractor
 md = MarkItDown()
 image_extractor = ImageExtractor()
+cleanup_scheduler = ImageCleanupScheduler(image_extractor)
+
+def start_cleanup_scheduler():
+    """Start the image cleanup scheduler"""
+    cleanup_scheduler.start_scheduler()
+
+def stop_cleanup_scheduler():
+    """Stop the image cleanup scheduler"""
+    cleanup_scheduler.stop_scheduler()
+
+def get_cleanup_status():
+    """Get the status of the cleanup scheduler"""
+    return cleanup_scheduler.get_status()
 
 def _integrate_images_into_markdown(content: str, images: list) -> str:
     """Integrate extracted images into markdown content at appropriate positions"""

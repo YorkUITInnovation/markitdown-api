@@ -147,6 +147,30 @@ async def upload_file(file: UploadFile = File(...), api_key: str = Depends(verif
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing uploaded file: {str(e)}")
 
+# Start the image cleanup scheduler on application startup
+@app.on_event("startup")
+async def startup_event():
+    """Initialize services and start the image cleanup scheduler"""
+    print("Starting MarkItDown API server...")
+    print("Initializing image cleanup scheduler...")
+    services.start_cleanup_scheduler()
+    print("Image cleanup scheduler started successfully")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Clean up services on application shutdown"""
+    print("Shutting down MarkItDown API server...")
+    services.stop_cleanup_scheduler()
+    print("Image cleanup scheduler stopped")
+
+@app.get("/cleanup-status",
+         summary="Get image cleanup status",
+         description="Returns the current status of the image cleanup scheduler",
+         dependencies=[Depends(verify_api_key)])
+async def get_cleanup_status(api_key: str = Depends(verify_api_key)):
+    """Get the current status of the image cleanup scheduler"""
+    return services.get_cleanup_status()
+
 # Custom OpenAPI schema to ensure security is properly documented
 def custom_openapi():
     if app.openapi_schema:

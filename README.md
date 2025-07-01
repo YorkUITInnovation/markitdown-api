@@ -10,6 +10,9 @@ A FastAPI-based web service that converts files and URLs to Markdown using Micro
 - **Advanced Image Processing**: Automatically extracts and integrates images from documents
 - **Smart Image Placement**: Intelligently places extracted images within the markdown content
 - **Image URL Generation**: Serves extracted images through accessible URLs
+- **Automated Image Cleanup**: Scheduled daily cleanup of old image folders to manage disk space
+- **Configurable Retention**: Customizable image retention period via environment variables
+- **Cleanup Monitoring**: Real-time status monitoring of cleanup operations
 - **Secure API**: API key authentication for all conversion endpoints
 - **Production Security**: Automatic documentation disabling in production environments
 - **Auto-reload**: Development server with automatic reloading
@@ -55,6 +58,13 @@ DISABLE_DOCS=false
 
 # Optional: Maximum upload file size in MB (default: 100MB)
 MAX_UPLOAD_SIZE_MB=100
+
+# Image cleanup configuration
+# Number of days after which image folders should be deleted (default: 7)
+IMAGE_CLEANUP_DAYS=7
+
+# Daily cleanup time in 24-hour format HH:MM (default: 02:00)
+IMAGE_CLEANUP_TIME=02:00
 ```
 
 ## Environment Configuration
@@ -139,6 +149,106 @@ API_KEYS=your-api-keys-here
 - **Use Case**: Match the limit to your typical file sizes
 
 When a file exceeds the configured limit, the API returns a `413 Payload Too Large` error with the current size limit.
+
+## Image Cleanup System
+
+The API includes an intelligent image cleanup system that automatically manages disk space by removing old extracted images. This prevents unlimited storage growth while maintaining recent images for accessibility.
+
+### How It Works
+
+1. **Automatic Scheduling**: The cleanup runs daily at a specified time
+2. **Age-Based Deletion**: Only removes image folders older than the configured number of days
+3. **Background Operation**: Runs silently without affecting API performance
+4. **Detailed Logging**: Provides comprehensive cleanup statistics and logs
+
+### Configuration
+
+Configure the cleanup system using environment variables:
+
+```env
+# Delete image folders older than 7 days (default)
+IMAGE_CLEANUP_DAYS=7
+
+# Run cleanup daily at 2:00 AM (default)
+IMAGE_CLEANUP_TIME=02:00
+```
+
+#### Common Configuration Examples
+
+**Conservative Cleanup (14 days)**
+```env
+IMAGE_CLEANUP_DAYS=14
+IMAGE_CLEANUP_TIME=03:00
+```
+
+**Aggressive Cleanup (3 days)**
+```env
+IMAGE_CLEANUP_DAYS=3
+IMAGE_CLEANUP_TIME=01:30
+```
+
+**Production Settings**
+```env
+IMAGE_CLEANUP_DAYS=7
+IMAGE_CLEANUP_TIME=02:00
+ENVIRONMENT=production
+```
+
+### Cleanup Process
+
+The cleanup system follows these steps:
+
+1. **Scan**: Examines all folders in the images directory
+2. **Evaluate**: Checks creation time against the configured retention period
+3. **Calculate**: Determines folder sizes before deletion
+4. **Delete**: Removes folders and all contained files
+5. **Report**: Logs detailed statistics about the cleanup operation
+
+### Monitoring Cleanup Status
+
+Use the `/cleanup-status` endpoint to monitor the cleanup system:
+
+**GET** `/cleanup-status`
+
+**Headers:**
+- `Authorization: Bearer YOUR_API_KEY`
+
+**Example:**
+```bash
+curl -H "Authorization: Bearer your-api-key" \
+  http://localhost:8000/cleanup-status
+```
+
+**Response:**
+```json
+{
+  "running": true,
+  "cleanup_days": 7,
+  "cleanup_time": "02:00",
+  "next_cleanup": "2025-07-02 02:00:00",
+  "images_directory": "/static/images"
+}
+```
+
+### Cleanup Logs
+
+The system provides detailed logging of cleanup operations:
+
+```
+[INFO] Starting image cleanup task (deleting folders older than 7 days)
+[INFO] Cleanup completed successfully:
+[INFO]   - Deleted folders: 3
+[INFO]   - Freed space: 15.7 MB
+[INFO]   - Deleted folder names: document_abc123, presentation_def456, spreadsheet_ghi789
+```
+
+### Benefits
+
+- **Automatic Disk Management**: Prevents storage bloat without manual intervention
+- **Configurable Retention**: Adjust retention period based on your needs
+- **Production Ready**: Reliable background operation suitable for production environments
+- **Resource Efficiency**: Scheduled during low-traffic hours to minimize impact
+- **Detailed Monitoring**: Complete visibility into cleanup operations
 
 ## Running the Server
 

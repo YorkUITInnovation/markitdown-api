@@ -3,6 +3,8 @@ import shutil
 import uuid
 import zipfile
 import tempfile
+import time
+import datetime
 from pathlib import Path
 from typing import List, Dict, Any
 from PIL import Image
@@ -334,3 +336,75 @@ class ImageExtractor:
             print(f"Error processing archive file: {e}")
 
         return images
+
+    def cleanup_old_images(self, days_old: int) -> Dict[str, Any]:
+        """
+        Delete image folders that are older than the specified number of days.
+
+        Args:
+            days_old: Number of days after which image folders should be deleted
+
+        Returns:
+            Dictionary with cleanup statistics
+        """
+        if not self.images_dir.exists():
+            return {
+                "status": "skipped",
+                "reason": "Images directory does not exist",
+                "deleted_folders": 0,
+                "freed_space_mb": 0
+            }
+
+        cutoff_time = time.time() - (days_old * 24 * 60 * 60)  # Convert days to seconds
+        deleted_folders = 0
+        freed_space_bytes = 0
+        deleted_folder_names = []
+
+        try:
+            for folder_path in self.images_dir.iterdir():
+                if folder_path.is_dir():
+                    # Get folder creation time
+                    folder_stat = folder_path.stat()
+                    folder_creation_time = folder_stat.st_ctime
+
+                    if folder_creation_time < cutoff_time:
+                        # Calculate folder size before deletion
+                        folder_size = self._get_folder_size(folder_path)
+
+                        try:
+                            # Delete the folder and all its contents
+                            shutil.rmtree(folder_path)
+                            deleted_folders += 1
+                            freed_space_bytes += folder_size
+                            deleted_folder_names.append(folder_path.name)
+                            print(f"Deleted old image folder: {folder_path.name}")
+                        except Exception as e:
+                            print(f"Error deleting folder {folder_path.name}: {e}")
+
+            return {
+                "status": "completed",
+                "deleted_folders": deleted_folders,
+                "freed_space_mb": round(freed_space_bytes / (1024 * 1024), 2),
+                "deleted_folder_names": deleted_folder_names,
+                "cleanup_time": datetime.datetime.now().isoformat()
+            }
+
+        except Exception as e:
+            return {
+                "status": "error",
+                "error": str(e),
+                "deleted_folders": deleted_folders,
+                "freed_space_mb": round(freed_space_bytes / (1024 * 1024), 2)
+            }
+
+    def _get_folder_size(self, folder_path: Path) -> int:
+        """Calculate the total size of a folder in bytes"""
+        total_size = 0
+        try:
+            for file_path in folder_path.rglob('*'):
+                if file_path.is_file():
+                    total_size += file_path.stat().st_size
+        except Exception as e:
+            print(f"Error calculating size for {folder_path}: {e}")
+        return total_size
+
