@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
+from fastapi.staticfiles import StaticFiles
 from fastapi.openapi.utils import get_openapi
 import tempfile
 from urllib.parse import urlparse
@@ -16,6 +17,11 @@ app = FastAPI(
     redoc_url="/redoc" if docs_enabled else None,
     openapi_url="/openapi.json" if docs_enabled else None
 )
+
+# Mount static files for serving extracted images
+static_dir = Path("static")
+static_dir.mkdir(exist_ok=True)
+app.mount("/images", StaticFiles(directory="static/images"), name="images")
 
 @app.get("/version",
          summary="Get API version",
@@ -96,15 +102,22 @@ async def upload_file(file: UploadFile = File(...), api_key: str = Depends(verif
             # Convert using MarkItDown
             result = services.md.convert(temp_file_path)
 
+            # Extract images from the file
+            images = services.image_extractor.extract_images_from_file(temp_file_path, filename)
+
             # Ensure the content is properly encoded as UTF-8
             content = result.text_content
             if isinstance(content, bytes):
                 content = content.decode('utf-8', errors='replace')
 
+            # Integrate images into the markdown content
+            content = services._integrate_images_into_markdown(content, images)
+
             return UploadResponse(
                 filename=filename,
                 content=content,
-                file_size=file_size
+                file_size=file_size,
+                images=images
             )
 
         finally:
@@ -139,3 +152,7 @@ def custom_openapi():
     return app.openapi_schema
 
 app.openapi = custom_openapi
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

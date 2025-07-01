@@ -1,14 +1,68 @@
 import requests
 import tempfile
 import os
+import re
 from urllib.parse import urlparse
 from pathlib import Path
 from markitdown import MarkItDown
 from fastapi import HTTPException
 from classes import ConvertResponse
+from classes.image_extractor import ImageExtractor
 
-# Initialize MarkItDown
+# Initialize MarkItDown and ImageExtractor
 md = MarkItDown()
+image_extractor = ImageExtractor()
+
+def _integrate_images_into_markdown(content: str, images: list) -> str:
+    """Integrate extracted images into markdown content at appropriate positions"""
+    if not images:
+        return content
+
+    lines = content.split('\n')
+    processed_lines = []
+    image_index = 0
+
+    # Strategy: Insert images at logical break points
+    for i, line in enumerate(lines):
+        processed_lines.append(line)
+
+        # Insert images after headings (but not immediately after the first line)
+        if line.strip().startswith('#') and i > 0:
+            if image_index < len(images):
+                image = images[image_index]
+                # Add some spacing and the image
+                processed_lines.append("")
+                processed_lines.append(f"![{image.filename}]({image.url})")
+                processed_lines.append("")
+                image_index += 1
+
+        # Insert images after paragraphs (empty line followed by content)
+        elif (line.strip() == '' and
+              i < len(lines) - 1 and
+              lines[i + 1].strip() != '' and
+              not lines[i + 1].strip().startswith('#') and
+              image_index < len(images)):
+
+            # Only insert if we haven't used too many images yet
+            if image_index < min(len(images), 3):  # Limit to 3 images in content
+                image = images[image_index]
+                processed_lines.append(f"![{image.filename}]({image.url})")
+                processed_lines.append("")
+                image_index += 1
+
+    # Add any remaining images at the end in a dedicated section
+    if image_index < len(images):
+        processed_lines.append("")
+        processed_lines.append("---")
+        processed_lines.append("")
+        processed_lines.append("## Extracted Images")
+        processed_lines.append("")
+
+        for remaining_image in images[image_index:]:
+            processed_lines.append(f"![{remaining_image.filename}]({remaining_image.url})")
+            processed_lines.append("")
+
+    return '\n'.join(processed_lines)
 
 async def convert_url(url: str) -> ConvertResponse:
     """Convert a URL to markdown"""
@@ -32,14 +86,21 @@ async def convert_url(url: str) -> ConvertResponse:
             # Convert using MarkItDown
             result = md.convert(temp_file_path)
 
+            # Extract images from the file
+            images = image_extractor.extract_images_from_file(temp_file_path, filename)
+
             # Ensure the content is properly encoded as UTF-8
             content = result.text_content
             if isinstance(content, bytes):
                 content = content.decode('utf-8', errors='replace')
 
+            # Integrate images into the markdown content
+            content = _integrate_images_into_markdown(content, images)
+
             return ConvertResponse(
                 filename=filename,
-                content=content
+                content=content,
+                images=images
             )
         finally:
             # Clean up temporary file
@@ -65,14 +126,21 @@ async def convert_file(file_path: str) -> ConvertResponse:
         # Convert using MarkItDown
         result = md.convert(file_path)
 
+        # Extract images from the file
+        images = image_extractor.extract_images_from_file(file_path, filename)
+
         # Ensure the content is properly encoded as UTF-8
         content = result.text_content
         if isinstance(content, bytes):
             content = content.decode('utf-8', errors='replace')
 
+        # Integrate images into the markdown content
+        content = _integrate_images_into_markdown(content, images)
+
         return ConvertResponse(
             filename=filename,
-            content=content
+            content=content,
+            images=images
         )
 
     except Exception as e:
