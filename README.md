@@ -7,6 +7,9 @@ A FastAPI-based web service that converts files and URLs to Markdown using Micro
 - **File Upload & Conversion**: Upload files directly and convert them to Markdown
 - **URL Conversion**: Convert web pages and online documents to Markdown
 - **Multiple File Formats**: Supports PDF, Word documents, PowerPoint, Excel, images, and more
+- **Advanced Image Processing**: Automatically extracts and integrates images from documents
+- **Smart Image Placement**: Intelligently places extracted images within the markdown content
+- **Image URL Generation**: Serves extracted images through accessible URLs
 - **Secure API**: API key authentication for all conversion endpoints
 - **Production Security**: Automatic documentation disabling in production environments
 - **Auto-reload**: Development server with automatic reloading
@@ -252,6 +255,93 @@ fetch('http://localhost:8000/upload', {
   "file_size": 1024576
 }
 ```
+
+## Image Processing
+
+The API now includes advanced image processing capabilities that enhance the markdown conversion experience:
+
+### Automatic Image Extraction
+
+The service automatically extracts images from various document types:
+
+- **PDF Files**: Extracts embedded images from all pages
+- **Word Documents (.docx)**: Retrieves images from document relationships
+- **PowerPoint Presentations (.pptx)**: Extracts images from slides
+- **Excel Spreadsheets (.xlsx)**: Retrieves embedded images
+- **OpenDocument Formats (.odt, .odp, .ods)**: Supports ODF image extraction
+- **Archive Files (.zip, .rar, .7z)**: Finds images within compressed files
+- **HTML/XML Files**: Extracts referenced images
+
+### Smart Image Integration
+
+Instead of just listing images separately, the API now intelligently integrates them into the markdown content:
+
+#### Strategic Placement
+- **After Headings**: Images are placed after section headings for logical organization
+- **Paragraph Breaks**: Images appear at natural content breaks
+- **Content Flow**: Maintains document structure and readability
+
+#### Intelligent Distribution
+- **In-Content Images**: Up to 3 images are strategically placed within the content
+- **Dedicated Section**: Remaining images are organized in an "Extracted Images" section
+- **Proper Formatting**: Images include alt text and proper spacing
+
+### Image URL Structure
+
+Extracted images are served through accessible URLs with the following structure:
+```
+http://localhost:8000/images/{document_folder}/{filename}
+```
+
+Where:
+- `document_folder`: Unique folder based on document name and UUID
+- `filename`: Original or generated filename with appropriate extension
+
+### Image Metadata
+
+Each extracted image includes comprehensive metadata:
+
+```json
+{
+  "filename": "image1.png",
+  "url": "http://localhost:8000/images/document_abc123/image1.png",
+  "width": 800,
+  "height": 600
+}
+```
+
+### Example Output
+
+When processing a document with images, the markdown output now includes integrated images:
+
+```markdown
+# Document Title
+
+This is the document content...
+
+![image1.png](http://localhost:8000/images/document_abc123/image1.png)
+
+## Section Heading
+
+More content here...
+
+![image2.png](http://localhost:8000/images/document_abc123/image2.png)
+
+---
+
+## Extracted Images
+
+![image3.png](http://localhost:8000/images/document_abc123/image3.png)
+
+![image4.png](http://localhost:8000/images/document_abc123/image4.png)
+```
+
+### Static File Serving
+
+The API automatically serves extracted images through the `/images/` endpoint:
+- **Direct Access**: Images can be accessed directly via their URLs
+- **Browser Viewing**: Images display properly in web browsers
+- **Markdown Rendering**: Images render correctly in markdown viewers
 
 ## Error Responses
 
