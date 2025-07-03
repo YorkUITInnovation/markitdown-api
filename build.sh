@@ -6,11 +6,11 @@
 set -e  # Exit on any error
 
 # Configuration
-DOCKER_HUB_USERNAME="uitadmin"  # Replace with your Docker Hub username
+DOCKER_HUB_USERNAME="YOUR_DOCKERHUB_USERNAME"  # Replace with your Docker Hub username
 IMAGE_NAME="markitdown-api"
 IMAGE_TAG="latest"
 # Additional tags (space-separated)
-ADDITIONAL_TAGS="v1.2.1"
+ADDITIONAL_TAGS="v1.0.0 Stable"
 CONTAINER_NAME="markitdown-api-container"
 PORT="8000"
 
