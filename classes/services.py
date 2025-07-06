@@ -15,6 +15,111 @@ md = MarkItDown()
 image_extractor = ImageExtractor()
 cleanup_scheduler = ImageCleanupScheduler(image_extractor)
 
+def _add_page_numbers_to_markdown(content: str, file_path: str = None) -> str:
+    """Add page numbers to markdown content when pages are detected"""
+    if not content:
+        return content
+
+    # Check if this is a PDF file (most likely to have pages)
+    is_pdf = file_path and Path(file_path).suffix.lower() == '.pdf'
+
+    # Common patterns that indicate page breaks in converted content
+    page_break_patterns = [
+        r'\n\s*\n\s*(?=\w)',  # Double newlines followed by content
+        r'\f',  # Form feed character
+        r'(?i)page\s*\d+',  # Existing page references
+        r'(?i)\\page',  # LaTeX page breaks
+    ]
+
+    # For PDF files, we can be more aggressive about detecting pages
+    if is_pdf:
+        # Split content into potential pages based on common patterns
+        # Look for sections that might represent page breaks
+        lines = content.split('\n')
+        processed_lines = []
+        page_number = 1
+        line_count = 0
+
+        # Add first page marker
+        processed_lines.append(f"## Page {page_number}")
+        processed_lines.append("")
+
+        for i, line in enumerate(lines):
+            line_count += 1
+            processed_lines.append(line)
+
+            # Detect potential page breaks based on content patterns
+            should_add_page_break = False
+
+            # Method 1: Large gaps in content (multiple empty lines)
+            if (line.strip() == '' and
+                i < len(lines) - 2 and
+                lines[i + 1].strip() == '' and
+                lines[i + 2].strip() != '' and
+                line_count > 20):  # Only after substantial content
+                should_add_page_break = True
+
+            # Method 2: Detect headers that might indicate new pages
+            elif (line.strip().startswith('#') and
+                  line_count > 30 and
+                  i > 0 and
+                  lines[i - 1].strip() == ''):
+                should_add_page_break = True
+
+            # Method 3: Long content sections (rough estimate)
+            elif line_count > 50 and line.strip() == '':
+                should_add_page_break = True
+
+            if should_add_page_break:
+                page_number += 1
+                processed_lines.append("")
+                processed_lines.append("---")
+                processed_lines.append("")
+                processed_lines.append(f"## Page {page_number}")
+                processed_lines.append("")
+                line_count = 0
+
+        return '\n'.join(processed_lines)
+
+    # For non-PDF files, use simpler page detection
+    else:
+        # Look for explicit page markers or form feeds
+        if '\f' in content:
+            pages = content.split('\f')
+            result_pages = []
+            for i, page_content in enumerate(pages):
+                if page_content.strip():
+                    result_pages.append(f"## Page {i + 1}\n\n{page_content.strip()}")
+            return '\n\n---\n\n'.join(result_pages)
+
+        # Check for very long content that might benefit from page markers
+        lines = content.split('\n')
+        if len(lines) > 100:  # Long documents
+            processed_lines = []
+            page_number = 1
+            line_count = 0
+
+            processed_lines.append(f"## Page {page_number}")
+            processed_lines.append("")
+
+            for line in lines:
+                line_count += 1
+                processed_lines.append(line)
+
+                # Add page breaks for very long content
+                if line_count > 80 and line.strip() == '':
+                    page_number += 1
+                    processed_lines.append("")
+                    processed_lines.append("---")
+                    processed_lines.append("")
+                    processed_lines.append(f"## Page {page_number}")
+                    processed_lines.append("")
+                    line_count = 0
+
+            return '\n'.join(processed_lines)
+
+    return content
+
 def start_cleanup_scheduler():
     """Start the image cleanup scheduler"""
     cleanup_scheduler.start_scheduler()
@@ -111,6 +216,9 @@ async def convert_url(url: str) -> ConvertResponse:
             # Integrate images into the markdown content
             content = _integrate_images_into_markdown(content, images)
 
+            # Add page numbers to the content if applicable
+            content = _add_page_numbers_to_markdown(content, temp_file_path)
+
             return ConvertResponse(
                 filename=filename,
                 content=content,
@@ -150,6 +258,9 @@ async def convert_file(file_path: str) -> ConvertResponse:
 
         # Integrate images into the markdown content
         content = _integrate_images_into_markdown(content, images)
+
+        # Add page numbers to the content if applicable
+        content = _add_page_numbers_to_markdown(content, file_path)
 
         return ConvertResponse(
             filename=filename,

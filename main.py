@@ -130,6 +130,9 @@ async def upload_file(file: UploadFile = File(...), api_key: str = Depends(verif
             # Integrate images into the markdown content
             content = services._integrate_images_into_markdown(content, images)
 
+            # Add page numbers to the content if applicable
+            content = services._add_page_numbers_to_markdown(content, temp_file_path)
+
             return UploadResponse(
                 filename=filename,
                 content=content,
