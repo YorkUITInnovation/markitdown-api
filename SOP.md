@@ -15,8 +15,9 @@
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.0     | July 6, 2025 | Initial SOP creation |
-| 1.2.3    | July 6, 2025 | Added page numbering functionality |
+| 1.2.2   | July 6, 2025 | Initial SOP creation |
+| 1.2.3   | July 6, 2025 | Added page numbering functionality |
+| 1.2.4   | July 6, 2025 | Added multi-architecture Docker support (AMD64 and ARM chipsets) |
 
 ---
 
@@ -27,11 +28,14 @@
 - **Docker**: Containerization platform used for deployment
 - **Uvicorn**: ASGI server for running the FastAPI application
 - **API Key**: Authentication token required to access protected endpoints
+- **Multi-architecture**: Support for both AMD64 (x86_64) and ARM64 architectures in Docker images
 ---
 
 ## 4. Introduction
 
 The MarkItDown API is a REST API service that provides document-to-markdown conversion capabilities. It accepts various file formats including PDF, DOCX, images, and other document types, converting them to clean, structured Markdown format. The API includes features for image extraction, page numbering, and automated cleanup processes.
+
+As of version 1.2.4, the API includes full Docker support for both AMD64 and ARM chipsets, ensuring compatibility across different hardware architectures including Intel/AMD processors and Apple Silicon (M1/M2) chips.
 
 This SOP is intended for developers, system administrators, and DevOps engineers who need to deploy, maintain, or troubleshoot the MarkItDown API service.
 
@@ -68,6 +72,8 @@ The MarkItDown API serves to:
 ### Docker Environment
 - Docker Engine 20.10+
 - Docker Compose 2.0+
+- **Architecture Support**: AMD64 (x86_64) and ARM64 (Apple Silicon, ARM-based servers)
+- **Buildx**: Docker Buildx for multi-platform builds (recommended for development)
 
 ---
 
@@ -129,6 +135,7 @@ The MarkItDown API serves to:
 
 ### 8.2. Docker Deployment
 
+#### Single Architecture Build
 1. **Build Docker image**
    ```bash
    docker build -t markitdown-api .
@@ -143,6 +150,27 @@ The MarkItDown API serves to:
    ```bash
    docker run -d -p 8000:8000 --env-file docker_apikeys.env markitdown-api
    ```
+
+#### Multi-Architecture Build (v1.2.4+)
+1. **Setup Docker Buildx (if not already configured)**
+   ```bash
+   docker buildx create --name markitdown-builder --use
+   ```
+
+2. **Build for multiple architectures**
+   ```bash
+   docker buildx build --platform linux/amd64,linux/arm64 -t markitdown-api .
+   ```
+
+3. **Build and push to registry**
+   ```bash
+   docker buildx build --platform linux/amd64,linux/arm64 -t your-registry/markitdown-api --push .
+   ```
+
+#### Architecture-Specific Deployment
+- **AMD64 (Intel/AMD)**: Standard x86_64 servers and workstations
+- **ARM64**: Apple Silicon (M1/M2), ARM-based servers, Raspberry Pi 4+
+- **Automatic detection**: Docker automatically pulls the correct architecture
 
 ---
 
@@ -327,6 +355,14 @@ The API automatically detects and adds page numbers to converted documents:
 - **Check**: Image build completed
 - **Check**: Port mapping configuration
 - **Check**: Environment file exists
+- **Check**: Architecture compatibility (AMD64 vs ARM64)
+- **Check**: Docker Buildx configuration for multi-platform builds
+
+#### Multi-Architecture Issues (v1.2.4+)
+- **Wrong Architecture**: Ensure Docker pulls correct image for your system
+- **Buildx Not Available**: Install Docker Buildx plugin if missing
+- **Platform Build Failures**: Check base image compatibility with target architectures
+- **Registry Push Issues**: Verify registry supports multi-architecture manifests
 
 ### 13.2. Log Analysis
 
