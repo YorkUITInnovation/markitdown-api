@@ -13,6 +13,9 @@ IMAGE_TAG="latest"
 ADDITIONAL_TAGS="v1.0.0 Stable"
 CONTAINER_NAME="markitdown-api-container"
 PORT="8000"
+# Multi-platform support
+PLATFORMS="linux/amd64,linux/arm64"
+BUILDER_NAME="markitdown-builder"
 
 # Full image name for Docker Hub
 DOCKER_HUB_IMAGE="${DOCKER_HUB_USERNAME}/${IMAGE_NAME}"
@@ -79,7 +82,7 @@ build_image() {
     print_info "Building Docker image: ${DOCKER_HUB_IMAGE}:${IMAGE_TAG}"
 
     # Build the main image
-    if docker build -t "${DOCKER_HUB_IMAGE}:${IMAGE_TAG}" .; then
+    if docker buildx build --platform $PLATFORMS -t "${DOCKER_HUB_IMAGE}:${IMAGE_TAG}" .; then
         print_success "Docker image built successfully with tag: ${IMAGE_TAG}"
 
         # Apply additional tags if specified
