@@ -270,8 +270,9 @@ Authorization: Bearer <your-api-key>
 
 #### Convert File
 - **POST** `/convert`
-- **Body**: `{"source": "path/to/file.pdf"}`
+- **Body**: `{"source": "path/to/file.pdf"}` or `{"source": "https://example.com/file.pdf"}`
 - **Response**: Markdown content with metadata
+- **Note**: The `source` parameter accepts both local file paths and URLs
 
 #### Upload and Convert
 - **POST** `/upload`
@@ -294,6 +295,12 @@ curl -X POST "http://localhost:8000/convert" \
   -H "Authorization: Bearer your-api-key" \
   -H "Content-Type: application/json" \
   -d '{"source": "/path/to/document.pdf"}'
+
+# Convert file by URL
+curl -X POST "http://localhost:8000/convert" \
+  -H "Authorization: Bearer your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"source": "https://example.com/document.pdf"}'
 
 # Upload and convert file
 curl -X POST "http://localhost:8000/upload" \
