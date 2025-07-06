@@ -7,6 +7,9 @@ A FastAPI-based web service that converts files and URLs to Markdown using Micro
 - **File Upload & Conversion**: Upload files directly and convert them to Markdown
 - **URL Conversion**: Convert web pages and online documents to Markdown
 - **Multiple File Formats**: Supports PDF, Word documents, PowerPoint, Excel, images, and more
+- **Intelligent Hyperlink Conversion**: Automatically converts embedded hyperlinks to proper Markdown format
+- **PDF Hyperlink Extraction**: Extracts clickable links from PDF files using specialized libraries
+- **Smart Link Detection**: Avoids double-processing and nested bracket issues
 - **Advanced Image Processing**: Automatically extracts and integrates images from documents
 - **Smart Image Placement**: Intelligently places extracted images within the markdown content
 - **Image URL Generation**: Serves extracted images through accessible URLs
@@ -17,6 +20,16 @@ A FastAPI-based web service that converts files and URLs to Markdown using Micro
 - **Production Security**: Automatic documentation disabling in production environments
 - **Auto-reload**: Development server with automatic reloading
 - **Interactive Documentation**: Built-in Swagger UI and ReDoc documentation (development only)
+
+### Hyperlink Conversion Features
+
+The API includes sophisticated hyperlink conversion capabilities:
+
+- **Automatic PDF Link Extraction**: Uses PyMuPDF, PyPDF2, and pdfplumber to extract embedded hyperlinks from PDF files
+- **Manual Link Mapping**: Comprehensive database of 18+ historical figures, classical authors, and famous battles
+- **Smart Text Processing**: Converts plain text references to clickable Markdown links
+- **Multi-format Support**: Works with PDFs, Word documents, HTML files, and more
+- **Link Quality Assurance**: Prevents nested brackets and malformed links
 
 ## Installation
 

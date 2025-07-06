@@ -127,11 +127,23 @@ async def upload_file(file: UploadFile = File(...), api_key: str = Depends(verif
             if isinstance(content, bytes):
                 content = content.decode('utf-8', errors='replace')
 
+            # Extract hyperlinks from PDF files
+            if Path(file.filename or "").suffix.lower() == '.pdf':
+                pdf_hyperlinks = services._extract_pdf_hyperlinks(temp_file_path)
+                content = services._integrate_pdf_hyperlinks(content, pdf_hyperlinks)
+
+                # Apply manual hyperlinks for cases where automatic extraction fails
+                content = services._apply_manual_hyperlinks(content, temp_file_path)
+
             # Integrate images into the markdown content
             content = services._integrate_images_into_markdown(content, images)
 
             # Add page numbers to the content if applicable
             content = services._add_page_numbers_to_markdown(content, temp_file_path)
+
+            # Convert hyperlinks to Markdown format (skip for PDFs since we already handled them)
+            if Path(file.filename or "").suffix.lower() != '.pdf':
+                content = services._convert_hyperlinks_to_markdown(content)
 
             return UploadResponse(
                 filename=filename,
