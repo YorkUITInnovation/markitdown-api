@@ -1,7 +1,7 @@
 fastapi>=0.104.1
 uvicorn>=0.24.0
 python-multipart>=0.0.6
-markitdown>=0.1.2
+markitdown[all]>=0.1.2
 requests>=2.31.0
 Pillow>=10.0.0
 PyMuPDF>=1.23.0

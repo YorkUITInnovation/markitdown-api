@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 from pathlib import Path
 from classes import (
     ConvertRequest, ConvertResponse, UploadResponse, VersionResponse,
-    verify_api_key, API_VERSION, MAX_UPLOAD_SIZE_MB, docs_enabled, services
+    verify_api_key, API_VERSION, MAX_UPLOAD_SIZE_MB, docs_enabled, services, config
 )
 
 app = FastAPI(
@@ -19,9 +19,9 @@ app = FastAPI(
 )
 
 # Mount static files for serving extracted images
-# Use root-level directory to avoid permission issues
-static_dir = Path("/static")
-images_dir = static_dir / "images"
+# Use configurable directory from environment variable
+static_dir = Path(config.IMAGES_DIR).parent
+images_dir = Path(config.IMAGES_DIR)
 
 # Create directories with proper error handling
 try:
@@ -38,7 +38,7 @@ except PermissionError:
     print(f"Warning: Using temporary directory for static files: {temp_static}")
     app.mount("/images", StaticFiles(directory=str(temp_images)), name="images")
 else:
-    app.mount("/images", StaticFiles(directory="/static/images"), name="images")
+    app.mount("/images", StaticFiles(directory=str(images_dir)), name="images")
 
 @app.get("/version",
          summary="Get API version",
