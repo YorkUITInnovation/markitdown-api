@@ -78,6 +78,9 @@ IMAGE_CLEANUP_DAYS=7
 
 # Daily cleanup time in 24-hour format HH:MM (default: 02:00)
 IMAGE_CLEANUP_TIME=02:00
+
+# Optional: Directory where extracted images will be stored
+IMAGES_DIR=/script/images
 ```
 
 ## Environment Configuration
@@ -184,6 +187,9 @@ IMAGE_CLEANUP_DAYS=7
 
 # Run cleanup daily at 2:00 AM (default)
 IMAGE_CLEANUP_TIME=02:00
+
+# Optional: Directory where extracted images will be stored
+IMAGES_DIR=/script/images
 ```
 
 #### Common Configuration Examples
