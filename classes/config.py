@@ -21,6 +21,9 @@ MAX_UPLOAD_SIZE_MB = int(os.getenv("MAX_UPLOAD_SIZE_MB", "100"))  # Default 100M
 # Images directory configuration
 IMAGES_DIR = os.getenv("IMAGES_DIR", "/static/images")  # Default /static/images
 
+# Base URL for image downloads
+IMAGE_BASE_URL = os.getenv("IMAGE_BASE_URL", "http://localhost:8000")  # Default localhost
+
 # Image cleanup configuration
 IMAGE_CLEANUP_DAYS = int(os.getenv("IMAGE_CLEANUP_DAYS", "7"))  # Default 7 days
 IMAGE_CLEANUP_TIME = os.getenv("IMAGE_CLEANUP_TIME", "02:00")  # Default 2:00 AM (24-hour format HH:MM)

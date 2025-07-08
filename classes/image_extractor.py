@@ -18,8 +18,9 @@ from classes import config
 class ImageExtractor:
     """Extract images from various document types and save them to accessible folders"""
 
-    def __init__(self, base_url: str = "http://localhost:8000", images_dir: str = None):
-        self.base_url = base_url.rstrip('/')
+    def __init__(self, base_url: str = None, images_dir: str = None):
+        # Use config.IMAGE_BASE_URL if no specific base_url is provided
+        self.base_url = (base_url or config.IMAGE_BASE_URL).rstrip('/')
         # Use config.IMAGES_DIR if no specific directory is provided
         self.images_dir = Path(images_dir or config.IMAGES_DIR)
         # Don't create directory immediately - do it lazily when first needed

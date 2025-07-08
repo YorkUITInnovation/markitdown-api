@@ -81,6 +81,10 @@ IMAGE_CLEANUP_TIME=02:00
 
 # Optional: Directory where extracted images will be stored
 IMAGES_DIR=/script/images
+
+# Base URL for image downloads (without trailing slash)
+# Change this when deploying to a server (default: http://localhost:8000)
+IMAGE_BASE_URL=http://localhost:8000
 ```
 
 ## Environment Configuration
@@ -190,6 +194,10 @@ IMAGE_CLEANUP_TIME=02:00
 
 # Optional: Directory where extracted images will be stored
 IMAGES_DIR=/script/images
+
+# Base URL for image downloads (without trailing slash)
+# Change this when deploying to a server (default: http://localhost:8000)
+IMAGE_BASE_URL=http://localhost:8000
 ```
 
 #### Common Configuration Examples
