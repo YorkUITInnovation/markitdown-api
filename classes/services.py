@@ -15,6 +15,123 @@ md = MarkItDown()
 image_extractor = ImageExtractor()
 cleanup_scheduler = ImageCleanupScheduler(image_extractor)
 
+def _enhance_heading_detection(content: str, file_path: str = None) -> str:
+    """
+    Enhance heading detection by converting various title patterns to H1 headings.
+    This captures Word document titles, styled headings, and other formatting that
+    MarkItDown might miss.
+    """
+    if not content or not content.strip():
+        return content
+
+    lines = content.split('\n')
+    processed_lines = []
+
+    # Patterns that indicate a heading/title
+    heading_patterns = [
+        # All caps text (common in titles)
+        r'^[A-Z][A-Z\s\d\-.,!?()]{4,}[A-Z\d]$',
+        # Title Case with specific patterns
+        r'^[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,8}$',
+        # Numbered sections (1. Title, 1.1 Title, etc.)
+        r'^\d+(?:\.\d+)*\.?\s+[A-Z][A-Za-z\s]+$',
+        # Roman numerals
+        r'^[IVX]+\.\s+[A-Z][A-Za-z\s]+$',
+        # Centered text patterns (detected by surrounding whitespace)
+        r'^\s{3,}[A-Z][A-Za-z\s\d\-.,!?()]{5,}\s{3,}$',
+        # Bold markers that might have been converted
+        r'^\*\*([A-Z][A-Za-z\s\d\-.,!?()]{3,})\*\*$',
+        # Underlined text patterns
+        r'^[A-Z][A-Za-z\s\d\-.,!?()]{3,}$(?=\n[-=_]{3,})',
+    ]
+
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        original_line = lines[i]
+
+        # Skip if already a markdown heading
+        if line.startswith('#'):
+            processed_lines.append(original_line)
+            i += 1
+            continue
+
+        # Skip empty lines
+        if not line:
+            processed_lines.append(original_line)
+            i += 1
+            continue
+
+        is_heading = False
+        heading_text = line
+
+        # Check each heading pattern
+        for pattern in heading_patterns:
+            if re.match(pattern, line):
+                is_heading = True
+                # Extract clean heading text for some patterns
+                if pattern.endswith(r'\*\*$'):  # Bold pattern
+                    match = re.match(r'^\*\*([^*]+)\*\*$', line)
+                    if match:
+                        heading_text = match.group(1)
+                elif pattern.startswith(r'^\d+'):  # Numbered sections
+                    # Remove numbering prefix
+                    heading_text = re.sub(r'^\d+(?:\.\d+)*\.?\s+', '', line)
+                elif pattern.startswith(r'^[IVX]+'):  # Roman numerals
+                    heading_text = re.sub(r'^[IVX]+\.\s+', '', line)
+                elif r'\s{3,}' in pattern:  # Centered text
+                    heading_text = line.strip()
+                break
+
+        # Additional heuristics for Word document titles
+        if not is_heading and line:
+            # Check if this looks like a standalone title
+            next_line = lines[i + 1].strip() if i + 1 < len(lines) else ""
+            prev_line = lines[i - 1].strip() if i > 0 else ""
+
+            # Standalone lines with title characteristics
+            if (len(line) < 80 and  # Not too long
+                len(line.split()) <= 12 and  # Reasonable word count for title
+                line[0].isupper() and  # Starts with capital
+                not line.endswith('.') and  # Doesn't end with period (not a sentence)
+                not line.endswith(',') and  # Doesn't end with comma
+                (not next_line or next_line == "" or not next_line[0].islower()) and  # Next line doesn't continue sentence
+                prev_line == ""):  # Previous line is empty (standalone)
+
+                # Additional checks to avoid false positives
+                if (not re.search(r'\b(the|a|an|and|or|but|in|on|at|to|for|of|with)\b', line.lower()) or
+                    len(line.split()) <= 4):  # Short phrases or avoid common sentence words
+                    is_heading = True
+
+        # Check for underlined headings (text followed by dashes, equals, etc.)
+        if not is_heading and i + 1 < len(lines):
+            next_line = lines[i + 1].strip()
+            if (next_line and
+                len(next_line) >= 3 and
+                all(c in '-=_' for c in next_line) and
+                abs(len(next_line) - len(line)) <= 5):  # Underline length roughly matches text
+                is_heading = True
+                # Skip the underline in next iteration
+                processed_lines.append(f"# {heading_text}")
+                i += 2  # Skip both current line and underline
+                continue
+
+        # Convert to H1 heading if identified as heading
+        if is_heading:
+            processed_lines.append(f"# {heading_text}")
+        else:
+            processed_lines.append(original_line)
+
+        i += 1
+
+    # Join the processed lines
+    enhanced_content = '\n'.join(processed_lines)
+
+    # Additional cleanup: Remove duplicate headings
+    enhanced_content = re.sub(r'\n# ([^\n]+)\n# \1\n', r'\n# \1\n', enhanced_content)
+
+    return enhanced_content
+
 def _extract_pdf_hyperlinks(file_path: str) -> dict:
     """Extract hyperlinks from PDF files using specialized libraries"""
     hyperlinks = {}
@@ -453,6 +570,9 @@ async def convert_url(url: str, create_pages: bool = True) -> ConvertResponse:
             if isinstance(content, bytes):
                 content = content.decode('utf-8', errors='replace')
 
+            # Enhance heading detection for Word documents and other formats
+            content = _enhance_heading_detection(content, temp_file_path)
+
             # Integrate images into the markdown content
             content = _integrate_images_into_markdown(content, images)
 
@@ -498,6 +618,9 @@ async def convert_file(file_path: str, create_pages: bool = True) -> ConvertResp
         content = result.text_content
         if isinstance(content, bytes):
             content = content.decode('utf-8', errors='replace')
+
+        # Enhance heading detection for Word documents and other formats
+        content = _enhance_heading_detection(content, file_path)
 
         # Extract hyperlinks from PDF files
         if path_obj.suffix.lower() == '.pdf':

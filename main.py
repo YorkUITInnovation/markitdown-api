@@ -135,6 +135,9 @@ async def upload_file(
             if isinstance(content, bytes):
                 content = content.decode('utf-8', errors='replace')
 
+            # Enhance heading detection for Word documents and other formats
+            content = services._enhance_heading_detection(content, temp_file_path)
+
             # Extract hyperlinks from PDF files
             if Path(file.filename or "").suffix.lower() == '.pdf':
                 pdf_hyperlinks = services._extract_pdf_hyperlinks(temp_file_path)
