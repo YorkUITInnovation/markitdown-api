@@ -255,9 +255,9 @@ def _convert_hyperlinks_to_markdown(content: str) -> str:
 
     return content
 
-def _add_page_numbers_to_markdown(content: str, file_path: str = None) -> str:
+def _add_page_numbers_to_markdown(content: str, file_path: str = None, create_pages: bool = True) -> str:
     """Add page numbers to markdown content when pages are detected"""
-    if not content:
+    if not content or not create_pages:
         return content
 
     # Check if this is a PDF file (most likely to have pages)
@@ -423,7 +423,7 @@ def _integrate_images_into_markdown(content: str, images: list) -> str:
 
     return '\n'.join(processed_lines)
 
-async def convert_url(url: str) -> ConvertResponse:
+async def convert_url(url: str, create_pages: bool = True) -> ConvertResponse:
     """Convert a URL to markdown"""
     try:
         # Download the file from URL with proper headers
@@ -457,7 +457,7 @@ async def convert_url(url: str) -> ConvertResponse:
             content = _integrate_images_into_markdown(content, images)
 
             # Add page numbers to the content if applicable
-            content = _add_page_numbers_to_markdown(content, temp_file_path)
+            content = _add_page_numbers_to_markdown(content, temp_file_path, create_pages)
 
             # Convert hyperlinks to Markdown format
             content = _convert_hyperlinks_to_markdown(content)
@@ -477,7 +477,7 @@ async def convert_url(url: str) -> ConvertResponse:
         raise HTTPException(status_code=500, detail=f"Error converting URL: {str(e)}")
 
 
-async def convert_file(file_path: str) -> ConvertResponse:
+async def convert_file(file_path: str, create_pages: bool = True) -> ConvertResponse:
     """Convert a local file to markdown"""
     try:
         # Check if file exists
@@ -511,7 +511,7 @@ async def convert_file(file_path: str) -> ConvertResponse:
         content = _integrate_images_into_markdown(content, images)
 
         # Add page numbers to the content if applicable
-        content = _add_page_numbers_to_markdown(content, file_path)
+        content = _add_page_numbers_to_markdown(content, file_path, create_pages)
 
         # Convert hyperlinks to Markdown format (skip for PDFs since we already handled them)
         if path_obj.suffix.lower() != '.pdf':

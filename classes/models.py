@@ -11,6 +11,7 @@ class ImageInfo(BaseModel):
 
 class ConvertRequest(BaseModel):
     source: str  # Can be a file path or URL
+    create_pages: Optional[bool] = True  # New optional parameter to control page creation
 
 
 class ConvertResponse(BaseModel):

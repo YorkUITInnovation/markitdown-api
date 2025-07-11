@@ -1,9 +1,10 @@
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.openapi.utils import get_openapi
 import tempfile
 from urllib.parse import urlparse
 from pathlib import Path
+from typing import Optional
 from classes import (
     ConvertRequest, ConvertResponse, UploadResponse, VersionResponse,
     verify_api_key, API_VERSION, MAX_UPLOAD_SIZE_MB, docs_enabled, services, config
@@ -64,15 +65,17 @@ async def convert(request: ConvertRequest, api_key: str = Depends(verify_api_key
     Convert a file or URL to markdown using Microsoft MarkItDown.
     Accepts either a local file path or an HTTP/HTTPS URL.
     Requires valid API key in Authorization header: Bearer <your-api-key>
+    Optional create_pages parameter (default: true) controls whether pages are created in the markdown.
     """
     source = request.source.strip()
+    create_pages = request.create_pages
 
     # Check if it's a URL
     parsed_url = urlparse(source)
     if parsed_url.scheme in ['http', 'https']:
-        return await services.convert_url(source)
+        return await services.convert_url(source, create_pages)
     else:
-        return await services.convert_file(source)
+        return await services.convert_file(source, create_pages)
 
 @app.post("/upload",
           summary="Upload and convert file to Markdown",
@@ -86,11 +89,16 @@ async def convert(request: ConvertRequest, api_key: str = Depends(verify_api_key
               422: {"description": "Invalid file type"},
               500: {"description": "Conversion error"}
           })
-async def upload_file(file: UploadFile = File(...), api_key: str = Depends(verify_api_key)):
+async def upload_file(
+    file: UploadFile = File(...),
+    create_pages: Optional[bool] = Form(True),
+    api_key: str = Depends(verify_api_key)
+):
     """
     Upload a file and convert it to markdown using Microsoft MarkItDown.
     Accepts various file types supported by MarkItDown (PDF, DOCX, images, etc.).
     Requires valid API key in Authorization header: Bearer <your-api-key>
+    Optional create_pages parameter (default: true) controls whether pages are created in the markdown.
     """
 
     # Check file size (limit to configured MB)
@@ -139,7 +147,7 @@ async def upload_file(file: UploadFile = File(...), api_key: str = Depends(verif
             content = services._integrate_images_into_markdown(content, images)
 
             # Add page numbers to the content if applicable
-            content = services._add_page_numbers_to_markdown(content, temp_file_path)
+            content = services._add_page_numbers_to_markdown(content, temp_file_path, create_pages)
 
             # Convert hyperlinks to Markdown format (skip for PDFs since we already handled them)
             if Path(file.filename or "").suffix.lower() != '.pdf':
