@@ -29,22 +29,44 @@ def _enhance_heading_detection(content: str, file_path: str = None) -> str:
     lines = content.split('\n')
     processed_lines = []
 
-    # Patterns that indicate a heading/title
+    # Patterns that indicate a heading/title (more restrictive)
     heading_patterns = [
-        # All caps text (common in titles)
-        r'^[A-Z][A-Z\s\d\-.,!?()]{4,}[A-Z\d]$',
-        # Title Case with specific patterns
-        r'^[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,8}$',
-        # Numbered sections (1. Title, 1.1 Title, etc.)
-        r'^\d+(?:\.\d+)*\.?\s+[A-Z][A-Za-z\s]+$',
+        # All caps text (common in titles) - but must be substantial and not contain common non-heading indicators
+        r'^[A-Z][A-Z\s\d\-]{8,}[A-Z\d]$',
+        # Numbered sections (1. Title, 1.1 Title, etc.) - but not simple numbering
+        r'^\d+(?:\.\d+)*\.?\s+[A-Z][A-Za-z\s]{3,}$',
         # Roman numerals
-        r'^[IVX]+\.\s+[A-Z][A-Za-z\s]+$',
+        r'^[IVX]+\.\s+[A-Z][A-Za-z\s]{3,}$',
         # Centered text patterns (detected by surrounding whitespace)
-        r'^\s{3,}[A-Z][A-Za-z\s\d\-.,!?()]{5,}\s{3,}$',
+        r'^\s{4,}[A-Z][A-Za-z\s\d\-.,!?()]{8,}\s{4,}$',
         # Bold markers that might have been converted
-        r'^\*\*([A-Z][A-Za-z\s\d\-.,!?()]{3,})\*\*$',
+        r'^\*\*([A-Z][A-Za-z\s\d\-.,!?()]{5,})\*\*$',
         # Underlined text patterns
-        r'^[A-Z][A-Za-z\s\d\-.,!?()]{3,}$(?=\n[-=_]{3,})',
+        r'^[A-Z][A-Za-z\s\d\-.,!?()]{5,}$(?=\n[-=_]{4,})',
+    ]
+
+    # Patterns that should NOT be treated as headings
+    exclusion_patterns = [
+        # Names with titles (Prof., Dr., Mr., Ms., etc.)
+        r'^(Prof\.?|Dr\.?|Mr\.?|Ms\.?|Mrs\.?)\s+',
+        # Email addresses or lines containing emails
+        r'.*@.*\..*',
+        # URLs or lines containing URLs
+        r'.*(https?://|www\.|\.com|\.org|\.net)',
+        # Contact information patterns
+        r'^(Phone|Tel|Email|Fax|Address|Office):?\s*',
+        # Course/class information - more specific pattern that requires colon or specific context
+        r'^(Course|Class|Section|Semester|Room|Time|Day|Location)\s*:',
+        # Lines that end with colons (field labels)
+        r'^[^:]{1,30}:\s*',
+        # Lines with specific academic/contact keywords
+        r'.*(phone|email|office|room|building|semester|lecture|tutorial|lab).*',
+        # Zoom/meeting links
+        r'.*(zoom|meeting|conference).*',
+        # Lines that are clearly data/values rather than headings
+        r'^[A-Z][a-z]+\s+\d{4}',  # Month Year
+        r'^\d+:\d+\s*(AM|PM)',     # Time formats
+        r'^[A-Z][a-z]+,\s*\d',    # Day, date formats
     ]
 
     i = 0
@@ -60,6 +82,18 @@ def _enhance_heading_detection(content: str, file_path: str = None) -> str:
 
         # Skip empty lines
         if not line:
+            processed_lines.append(original_line)
+            i += 1
+            continue
+
+        # Check exclusion patterns first
+        is_excluded = False
+        for exclusion_pattern in exclusion_patterns:
+            if re.search(exclusion_pattern, line, re.IGNORECASE):
+                is_excluded = True
+                break
+
+        if is_excluded:
             processed_lines.append(original_line)
             i += 1
             continue
@@ -81,37 +115,52 @@ def _enhance_heading_detection(content: str, file_path: str = None) -> str:
                     heading_text = re.sub(r'^\d+(?:\.\d+)*\.?\s+', '', line)
                 elif pattern.startswith(r'^[IVX]+'):  # Roman numerals
                     heading_text = re.sub(r'^[IVX]+\.\s+', '', line)
-                elif r'\s{3,}' in pattern:  # Centered text
+                elif r'\s{4,}' in pattern:  # Centered text
                     heading_text = line.strip()
                 break
 
-        # Additional heuristics for Word document titles
-        if not is_heading and line:
+        # Additional heuristics for Word document titles (more restrictive)
+        if not is_heading and line and not is_excluded:
             # Check if this looks like a standalone title
             next_line = lines[i + 1].strip() if i + 1 < len(lines) else ""
             prev_line = lines[i - 1].strip() if i > 0 else ""
 
-            # Standalone lines with title characteristics
-            if (len(line) < 80 and  # Not too long
-                len(line.split()) <= 12 and  # Reasonable word count for title
+            # More restrictive standalone title detection
+            if (len(line) < 60 and  # Not too long
+                len(line.split()) >= 2 and len(line.split()) <= 8 and  # Reasonable word count for title
                 line[0].isupper() and  # Starts with capital
                 not line.endswith('.') and  # Doesn't end with period (not a sentence)
                 not line.endswith(',') and  # Doesn't end with comma
+                not line.endswith(':') and  # Doesn't end with colon (not a label)
                 (not next_line or next_line == "" or not next_line[0].islower()) and  # Next line doesn't continue sentence
-                prev_line == ""):  # Previous line is empty (standalone)
+                prev_line == "" and  # Previous line is empty (standalone)
+                not re.search(r'\b(the|a|an|and|or|but|in|on|at|to|for|of|with|by)\b', line.lower()) and  # Avoid common sentence words
+                not re.search(r'\d{4}', line) and  # Avoid years/dates
+                not re.search(r'(monday|tuesday|wednesday|thursday|friday|saturday|sunday)', line.lower())):  # Avoid days
 
-                # Additional checks to avoid false positives
-                if (not re.search(r'\b(the|a|an|and|or|but|in|on|at|to|for|of|with)\b', line.lower()) or
-                    len(line.split()) <= 4):  # Short phrases or avoid common sentence words
+                # Additional check for title-like content
+                words = line.split()
+                if all(word[0].isupper() or word.lower() in ['of', 'the', 'and', 'in', 'to', 'for'] for word in words):
                     is_heading = True
 
+            # Special case: Common section titles in academic documents
+            elif (len(line.split()) >= 2 and len(line.split()) <= 4 and
+                  line[0].isupper() and
+                  prev_line == "" and  # Previous line is empty (standalone)
+                  re.match(r'^[A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)*$', line) and  # Title case - more flexible pattern
+                  line.lower() in ['course information', 'course description', 'learning outcomes',
+                                   'required texts', 'course objectives', 'grading scheme',
+                                   'assignment details', 'tutorial information', 'office hours']):
+                is_heading = True
+
         # Check for underlined headings (text followed by dashes, equals, etc.)
-        if not is_heading and i + 1 < len(lines):
+        if not is_heading and not is_excluded and i + 1 < len(lines):
             next_line = lines[i + 1].strip()
             if (next_line and
-                len(next_line) >= 3 and
+                len(next_line) >= 4 and
                 all(c in '-=_' for c in next_line) and
-                abs(len(next_line) - len(line)) <= 5):  # Underline length roughly matches text
+                abs(len(next_line) - len(line)) <= 5 and  # Underline length roughly matches text
+                len(line) >= 5):  # Minimum length for heading
                 is_heading = True
                 # Skip the underline in next iteration
                 processed_lines.append(f"# {heading_text}")
@@ -863,7 +912,7 @@ def _convert_base64_images_to_files(content: str, document_name: str) -> tuple[s
         # Standard markdown: ![alt](data:image/type;base64,...)
         r'!\[([^\]]*)\]\(data:image/([^;]+);base64,([^)]+)\)',
         # HTML img tags: <img src="data:image/type;base64,..." alt="..." />
-        r'<img[^>]*src=["\']data:image/([^;]+);base64,([^"\']+)["\'][^>]*(?:alt=["\']([^"\']*)["\'])?[^>]*/??>',
+        r'<img[^>]*src=["\']data:image/([^;]+);base64,([^"\']+)["\'][^>]*>(?:alt=["\']([^"\']*)["\'])?[^>]*/??>',
         # Variations with spaces or different formatting
         r'!\[([^\]]*)\]\(\s*data:image/([^;]+);\s*base64\s*,\s*([^)]+)\s*\)',
     ]
