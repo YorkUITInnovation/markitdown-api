@@ -492,56 +492,360 @@ def get_cleanup_status():
     return cleanup_scheduler.get_status()
 
 def _integrate_images_into_markdown(content: str, images: list) -> str:
-    """Integrate extracted images into markdown content at appropriate positions"""
+    """Integrate extracted images into markdown content at their original positions"""
     if not images:
         return content
 
+    # Enhanced strategy: Use positioning information to place images accurately
     lines = content.split('\n')
     processed_lines = []
-    image_index = 0
 
-    # Strategy: Insert images at logical break points
+    # Sort images by page number and position for proper ordering
+    sorted_images = sorted(images, key=lambda img: (
+        img.page_number or 0,
+        img.position_y or 0
+    ))
+
+    # Create a mapping of page numbers to images
+    page_to_images = {}
+    for image in sorted_images:
+        page_num = image.page_number or 1
+        if page_num not in page_to_images:
+            page_to_images[page_num] = []
+        page_to_images[page_num].append(image)
+
+    # Track which images have been placed
+    placed_images = set()
+    current_page = 1
+
     for i, line in enumerate(lines):
         processed_lines.append(line)
 
-        # Insert images after headings (but not immediately after the first line)
+        # Detect page breaks in content
+        if _is_page_break_indicator(line, lines, i):
+            current_page += 1
+
+        # Try to place images based on content context matching
+        if current_page in page_to_images:
+            for image in page_to_images[current_page]:
+                if image.filename in placed_images:
+                    continue
+
+                # Check if this is a good position for the image based on context
+                if _should_place_image_here(line, image, lines, i):
+                    processed_lines.append("")
+                    processed_lines.append(f"![{image.filename}]({image.url})")
+                    processed_lines.append("")
+                    placed_images.add(image.filename)
+
+        # Also place images after headings (fallback for images without good context)
         if line.strip().startswith('#') and i > 0:
-            if image_index < len(images):
-                image = images[image_index]
-                # Add some spacing and the image
-                processed_lines.append("")
-                processed_lines.append(f"![{image.filename}]({image.url})")
-                processed_lines.append("")
-                image_index += 1
+            # Look for unplaced images from current or previous pages
+            for page_num in range(max(1, current_page - 1), current_page + 2):
+                if page_num in page_to_images:
+                    for image in page_to_images[page_num]:
+                        if image.filename not in placed_images:
+                            processed_lines.append("")
+                            processed_lines.append(f"![{image.filename}]({image.url})")
+                            processed_lines.append("")
+                            placed_images.add(image.filename)
+                            break  # Only place one image per heading
+                    break
 
-        # Insert images after paragraphs (empty line followed by content)
-        elif (line.strip() == '' and
-              i < len(lines) - 1 and
-              lines[i + 1].strip() != '' and
-              not lines[i + 1].strip().startswith('#') and
-              image_index < len(images)):
-
-            # Only insert if we haven't used too many images yet
-            if image_index < min(len(images), 3):  # Limit to 3 images in content
-                image = images[image_index]
-                processed_lines.append(f"![{image.filename}]({image.url})")
-                processed_lines.append("")
-                image_index += 1
-
-    # Add any remaining images at the end in a dedicated section
-    if image_index < len(images):
+    # Add any remaining unplaced images at the end
+    unplaced_images = [img for img in sorted_images if img.filename not in placed_images]
+    if unplaced_images:
         processed_lines.append("")
         processed_lines.append("---")
         processed_lines.append("")
-        processed_lines.append("## Extracted Images")
+        processed_lines.append("## Document Images")
         processed_lines.append("")
 
-        for remaining_image in images[image_index:]:
-            processed_lines.append(f"![{remaining_image.filename}]({remaining_image.url})")
+        for image in unplaced_images:
+            processed_lines.append(f"![{image.filename}]({image.url})")
             processed_lines.append("")
 
     return '\n'.join(processed_lines)
 
+def _is_page_break_indicator(line: str, lines: list, line_index: int) -> bool:
+    """Detect if a line indicates a page break"""
+    line_stripped = line.strip()
+
+    # Explicit page indicators
+    if any(indicator in line_stripped.lower() for indicator in [
+        'page ', '---', '===', 'chapter ', 'section '
+    ]):
+        return True
+
+    # Multiple consecutive empty lines (often indicates page breaks)
+    if (line_stripped == '' and
+        line_index > 0 and
+        line_index < len(lines) - 1 and
+        lines[line_index - 1].strip() == '' and
+        lines[line_index + 1].strip() != ''):
+        return True
+
+    return False
+
+def _should_place_image_here(current_line: str, image: ImageInfo, lines: list, line_index: int) -> bool:
+    """Determine if an image should be placed at the current position based on context"""
+    if not image.content_context:
+        return False
+
+    # Get surrounding lines for context matching
+    context_window = 3
+    start_idx = max(0, line_index - context_window)
+    end_idx = min(len(lines), line_index + context_window + 1)
+    surrounding_text = ' '.join(lines[start_idx:end_idx]).lower()
+
+    # Check if image context matches surrounding text
+    image_context_words = image.content_context.lower().split()
+
+    # Look for word matches in surrounding text
+    matches = 0
+    for word in image_context_words:
+        if len(word) > 3 and word in surrounding_text:  # Only count meaningful words
+            matches += 1
+
+    # Place image if we have good context match
+    match_ratio = matches / len(image_context_words) if image_context_words else 0
+    return match_ratio > 0.3  # 30% of context words should match
+
+def _integrate_images_with_advanced_positioning(content: str, images: list, file_path: str = None) -> str:
+    """Advanced image integration that analyzes document structure for optimal placement"""
+    if not images:
+        return content
+
+    # For PDF files, we can use more sophisticated positioning
+    if file_path and Path(file_path).suffix.lower() == '.pdf':
+        try:
+            import fitz
+
+            # Re-analyze the PDF to get detailed text and image positioning
+            pdf_doc = fitz.open(file_path)
+            content_with_positions = _analyze_pdf_layout(pdf_doc, content, images)
+            pdf_doc.close()
+            return content_with_positions
+
+        except Exception as e:
+            print(f"Advanced positioning failed, using fallback: {e}")
+
+    # For DOCX files, use content position data
+    elif file_path and Path(file_path).suffix.lower() in ['.docx', '.doc']:
+        return _integrate_docx_images_by_position(content, images)
+
+    # Fallback to standard integration
+    return _integrate_images_into_markdown(content, images)
+
+def _integrate_docx_images_by_position(content: str, images: list) -> str:
+    """Integrate images into DOCX-converted content using position_in_content data"""
+    if not images:
+        return content
+
+    # Sort images by their position in content
+    positioned_images = [img for img in images if img.position_in_content is not None]
+    unpositioned_images = [img for img in images if img.position_in_content is None]
+
+    # Sort positioned images by their content position
+    positioned_images.sort(key=lambda img: img.position_in_content)
+
+    print(f"DEBUG: Processing {len(positioned_images)} positioned images and {len(unpositioned_images)} unpositioned images")
+
+    if not positioned_images:
+        # Fall back to context matching if no position data
+        return _integrate_images_by_context_matching(content, images)
+
+    # Convert content to list of lines for easier manipulation
+    lines = content.split('\n')
+
+    # Build a character position map for each line
+    line_positions = []
+    char_pos = 0
+    for line in lines:
+        line_positions.append(char_pos)
+        char_pos += len(line) + 1  # +1 for newline
+
+    # Insert images based on their content positions
+    insertions = []  # List of (line_index, image) tuples
+
+    for image in positioned_images:
+        target_char_pos = image.position_in_content
+
+        # Find the best line to insert the image
+        best_line_idx = 0
+        for i, line_char_pos in enumerate(line_positions):
+            if line_char_pos <= target_char_pos:
+                best_line_idx = i
+            else:
+                break
+
+        # Adjust insertion position based on content context
+        final_line_idx = _find_best_insertion_point(lines, best_line_idx, image)
+        insertions.append((final_line_idx, image))
+
+        print(f"DEBUG: Image {image.filename} positioned at character {target_char_pos}, inserting at line {final_line_idx}")
+        if image.content_context:
+            print(f"DEBUG: Context: {image.content_context[:100]}...")
+
+    # Sort insertions by line index (reverse order for proper insertion)
+    insertions.sort(key=lambda x: x[0], reverse=True)
+
+    # Insert images into content
+    result_lines = lines.copy()
+    for line_idx, image in insertions:
+        # Insert image with proper spacing
+        image_lines = [
+            "",
+            f"![{image.filename}]({image.url})",
+            ""
+        ]
+
+        # Insert after the target line
+        insert_pos = line_idx + 1
+        result_lines[insert_pos:insert_pos] = image_lines
+
+    # Handle unpositioned images at the end
+    if unpositioned_images:
+        result_lines.extend([
+            "",
+            "---",
+            "",
+            "## Additional Images",
+            ""
+        ])
+
+        for image in unpositioned_images:
+            result_lines.extend([
+                f"![{image.filename}]({image.url})",
+                ""
+            ])
+
+    return '\n'.join(result_lines)
+
+def _find_best_insertion_point(lines: list, target_line_idx: int, image: ImageInfo) -> int:
+    """Find the best line to insert an image near the target position"""
+    # Ensure we don't go out of bounds
+    target_line_idx = max(0, min(target_line_idx, len(lines) - 1))
+
+    # Look for a good insertion point within a small range
+    search_range = 3
+    start_idx = max(0, target_line_idx - search_range)
+    end_idx = min(len(lines), target_line_idx + search_range + 1)
+
+    # Preferred insertion points (in order of preference):
+    # 1. After a heading
+    # 2. After an empty line (paragraph break)
+    # 3. After a line that matches image context
+    # 4. The original target position
+
+    for offset in range(search_range + 1):
+        # Check positions around the target
+        for direction in [0, 1, -1]:  # target, after, before
+            check_idx = target_line_idx + (offset * direction)
+            if start_idx <= check_idx < end_idx:
+                line = lines[check_idx].strip()
+
+                # Priority 1: After headings
+                if line.startswith('#'):
+                    return check_idx
+
+                # Priority 2: After empty lines (good paragraph breaks)
+                if (check_idx > 0 and lines[check_idx - 1].strip() == '' and
+                    check_idx < len(lines) - 1 and lines[check_idx + 1].strip() != ''):
+                    return check_idx
+
+    # Priority 3: Check for context matching
+    if image.content_context:
+        context_words = image.content_context.lower().split()[:5]  # First 5 words
+
+        for check_idx in range(start_idx, end_idx):
+            line_text = lines[check_idx].lower()
+
+            # Count word matches
+            matches = sum(1 for word in context_words if len(word) > 3 and word in line_text)
+
+            if matches >= 2:  # Good context match
+                return check_idx
+
+    # Priority 4: Fall back to original target
+    return target_line_idx
+
+def _integrate_images_by_context_matching(content: str, images: list) -> str:
+    """Integrate images using content context matching when position data is unavailable"""
+    if not images:
+        return content
+
+    lines = content.split('\n')
+    result_lines = []
+    used_images = set()
+
+    for i, line in enumerate(lines):
+        result_lines.append(line)
+
+        # Try to place images that match this line's context
+        for image in images:
+            if image.filename in used_images or not image.content_context:
+                continue
+
+            # Check if this line matches the image context
+            if _line_matches_image_context(line, lines, i, image):
+                result_lines.extend([
+                    "",
+                    f"![{image.filename}]({image.url})",
+                    ""
+                ])
+                used_images.add(image.filename)
+                print(f"DEBUG: Placed {image.filename} at line {i} based on context match")
+                break  # Only place one image per line
+
+    # Add any remaining unplaced images
+    unused_images = [img for img in images if img.filename not in used_images]
+    if unused_images:
+        result_lines.extend([
+            "",
+            "---",
+            "",
+            "## Additional Images",
+            ""
+        ])
+
+        for image in unused_images:
+            result_lines.extend([
+                f"![{image.filename}]({image.url})",
+                ""
+            ])
+
+    return '\n'.join(result_lines)
+
+def _line_matches_image_context(line: str, lines: list, line_idx: int, image: ImageInfo) -> bool:
+    """Check if a line and its surrounding context matches an image's context"""
+    if not image.content_context:
+        return False
+
+    # Get surrounding context (current line + 2 before and after)
+    context_range = 2
+    start_idx = max(0, line_idx - context_range)
+    end_idx = min(len(lines), line_idx + context_range + 1)
+
+    surrounding_text = ' '.join(lines[start_idx:end_idx]).lower()
+    image_context_words = image.content_context.lower().split()
+
+    # Count meaningful word matches
+    matches = 0
+    total_words = 0
+
+    for word in image_context_words:
+        if len(word) > 3:  # Only count meaningful words
+            total_words += 1
+            if word in surrounding_text:
+                matches += 1
+
+    # Require at least 40% word match for context-based placement
+    if total_words > 0:
+        match_ratio = matches / total_words
+        return match_ratio >= 0.4
+
+    return False
 def _convert_base64_images_to_files(content: str, document_name: str) -> tuple[str, list[ImageInfo]]:
     """
     Detect base64 images in markdown content, convert them to image files,
@@ -891,8 +1195,8 @@ async def convert_url(url: str, create_pages: bool = True) -> ConvertResponse:
             # Enhance heading detection for Word documents and other formats
             content = _enhance_heading_detection(content, temp_file_path)
 
-            # Integrate images into the markdown content
-            content = _integrate_images_into_markdown(content, images)
+            # Integrate images into the markdown content using advanced positioning
+            content = _integrate_images_with_advanced_positioning(content, images, temp_file_path)
 
             # Add page numbers to the content if applicable
             content = _add_page_numbers_to_markdown(content, temp_file_path, create_pages)
@@ -958,8 +1262,8 @@ async def convert_file(file_path: str, create_pages: bool = True) -> ConvertResp
             # Apply manual hyperlinks for cases where automatic extraction fails
             content = _apply_manual_hyperlinks(content, file_path)
 
-        # Integrate images into the markdown content
-        content = _integrate_images_into_markdown(content, images)
+        # Integrate images into the markdown content using advanced positioning
+        content = _integrate_images_with_advanced_positioning(content, images, file_path)
 
         # Add page numbers to the content if applicable
         content = _add_page_numbers_to_markdown(content, file_path, create_pages)

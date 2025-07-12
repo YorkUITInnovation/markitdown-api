@@ -79,7 +79,7 @@ class ImageExtractor:
         return document_folder
 
     def _extract_from_pdf(self, file_path: Path, output_folder: Path) -> List[ImageInfo]:
-        """Extract images from PDF files"""
+        """Extract images from PDF files with positioning information"""
         images = []
         try:
             pdf_document = fitz.open(file_path)
@@ -87,6 +87,10 @@ class ImageExtractor:
             for page_num in range(len(pdf_document)):
                 page = pdf_document.load_page(page_num)
                 image_list = page.get_images()
+
+                # Extract text for this page to help with positioning context
+                page_text = page.get_text()
+                page_dict = page.get_text("dict")
 
                 for img_index, img in enumerate(image_list):
                     xref = img[0]
@@ -101,11 +105,31 @@ class ImageExtractor:
                         with Image.open(image_path) as img_obj:
                             width, height = img_obj.size
 
+                        # Get image position from page
+                        image_rects = []
+                        for block in page_dict.get("blocks", []):
+                            if "image" in block:
+                                image_rects.append(block["bbox"])
+
+                        # Use the image index to get approximate position
+                        position_x, position_y = None, None
+                        if img_index < len(image_rects):
+                            bbox = image_rects[img_index]
+                            position_x = bbox[0]  # Left coordinate
+                            position_y = bbox[1]  # Top coordinate
+
+                        # Get surrounding text context for better positioning
+                        content_context = self._get_text_context_around_image(page_text, position_y) if position_y else None
+
                         images.append(ImageInfo(
                             filename=filename,
                             url=f"{self.base_url}/images/{output_folder.name}/{filename}",
                             width=width,
-                            height=height
+                            height=height,
+                            page_number=page_num + 1,
+                            position_x=position_x,
+                            position_y=position_y,
+                            content_context=content_context
                         ))
 
                     pix = None
@@ -116,43 +140,193 @@ class ImageExtractor:
 
         return images
 
+    def _get_text_context_around_image(self, page_text: str, image_y_position: float) -> str:
+        """Extract text context around where an image appears on the page"""
+        if not page_text or image_y_position is None:
+            return None
+
+        # Split text into lines and find context around the image position
+        lines = page_text.split('\n')
+        # For simplicity, return first few lines as context
+        # In a more sophisticated implementation, we'd use coordinate data
+        context_lines = lines[:3] if len(lines) >= 3 else lines
+        return ' '.join(context_lines).strip()[:200]  # Limit context length
+
     def _extract_from_docx(self, file_path: Path, output_folder: Path) -> List[ImageInfo]:
-        """Extract images from DOCX files"""
+        """Extract images from DOCX files with positioning information"""
         images = []
         try:
             doc = Document(file_path)
 
-            # Extract from document relationships
+            # Create a mapping of image relationships to actual images
+            image_rels = {}
             for rel in doc.part.rels.values():
                 if "image" in rel.target_ref:
-                    try:
-                        image_data = rel.target_part.blob
-                        filename = f"image_{len(images) + 1}.{rel.target_ref.split('.')[-1]}"
-                        image_path = output_folder / filename
+                    image_rels[rel.rId] = rel.target_part.blob
 
-                        with open(image_path, 'wb') as f:
-                            f.write(image_data)
+            # Track processed images to avoid duplicates
+            processed_images = set()
+            image_count = 0
 
-                        # Get image dimensions
+            # Walk through document elements to find images and their positions
+            for paragraph_idx, paragraph in enumerate(doc.paragraphs):
+                # Check for images in this paragraph using a simpler approach
+                for run in paragraph.runs:
+                    # Check if this run contains images by looking for drawing elements
+                    if hasattr(run._element, 'xpath'):
                         try:
-                            with Image.open(image_path) as img_obj:
-                                width, height = img_obj.size
-                        except:
-                            width, height = None, None
+                            # Look for drawing elements (simpler xpath without namespaces)
+                            drawings = run._element.xpath('.//w:drawing')
+                            if drawings:
+                                # Look for embedded image references
+                                for drawing in drawings:
+                                    # Get all attributes that might contain image references
+                                    embed_ids = self._extract_embed_ids_from_drawing(drawing)
 
-                        images.append(ImageInfo(
-                            filename=filename,
-                            url=f"{self.base_url}/images/{output_folder.name}/{filename}",
-                            width=width,
-                            height=height
-                        ))
-                    except Exception as e:
-                        print(f"Error extracting image from DOCX: {e}")
+                                    for embed_id in embed_ids:
+                                        if embed_id and embed_id in image_rels:
+                                            # Create a unique identifier for this image data
+                                            image_data = image_rels[embed_id]
+                                            image_hash = hash(image_data)
+
+                                            # Skip if we've already processed this exact image
+                                            if image_hash in processed_images:
+                                                print(f"DEBUG: Skipping duplicate image with embed_id {embed_id}")
+                                                continue
+
+                                            processed_images.add(image_hash)
+                                            image_count += 1
+
+                                            # Determine file extension from image data
+                                            extension = self._get_image_extension(image_data)
+                                            filename = f"image_{image_count}.{extension}"
+                                            image_path = output_folder / filename
+
+                                            with open(image_path, 'wb') as f:
+                                                f.write(image_data)
+
+                                            # Get image dimensions
+                                            try:
+                                                with Image.open(image_path) as img_obj:
+                                                    width, height = img_obj.size
+                                            except:
+                                                width, height = None, None
+
+                                            # Create context from surrounding paragraphs
+                                            content_context = self._get_docx_context(doc.paragraphs, paragraph_idx)
+
+                                            # Calculate position in content (character-based estimation)
+                                            position_in_content = self._estimate_content_position(doc.paragraphs, paragraph_idx)
+
+                                            images.append(ImageInfo(
+                                                filename=filename,
+                                                url=f"{self.base_url}/images/{output_folder.name}/{filename}",
+                                                width=width,
+                                                height=height,
+                                                position_in_content=position_in_content,
+                                                content_context=content_context
+                                            ))
+
+                                            print(f"DEBUG: Found unique image {filename} at paragraph {paragraph_idx}, context: {content_context[:50] if content_context else 'None'}...")
+                        except Exception as e:
+                            print(f"DEBUG: Error processing run in paragraph {paragraph_idx}: {e}")
+                            continue
+
+            # If no images found through paragraph analysis, fall back to relationship method
+            if not images:
+                print("DEBUG: No images found in paragraph analysis, using relationship fallback")
+                processed_rels = set()
+                for rel in doc.part.rels.values():
+                    if "image" in rel.target_ref and rel.rId not in processed_rels:
+                        try:
+                            processed_rels.add(rel.rId)
+                            image_data = rel.target_part.blob
+                            filename = f"image_{len(images) + 1}.{rel.target_ref.split('.')[-1]}"
+                            image_path = output_folder / filename
+
+                            with open(image_path, 'wb') as f:
+                                f.write(image_data)
+
+                            # Get image dimensions
+                            try:
+                                with Image.open(image_path) as img_obj:
+                                    width, height = img_obj.size
+                            except:
+                                width, height = None, None
+
+                            images.append(ImageInfo(
+                                filename=filename,
+                                url=f"{self.base_url}/images/{output_folder.name}/{filename}",
+                                width=width,
+                                height=height
+                            ))
+                        except Exception as e:
+                            print(f"Error extracting image from DOCX: {e}")
 
         except Exception as e:
             print(f"Error processing DOCX file: {e}")
 
         return images
+
+    def _extract_embed_ids_from_drawing(self, drawing_element) -> List[str]:
+        """Extract embed IDs from a drawing element using string parsing as fallback"""
+        embed_ids = []
+        try:
+            # Convert element to string and search for embed references
+            element_str = str(drawing_element.xml) if hasattr(drawing_element, 'xml') else str(drawing_element)
+
+            # Look for r:embed attributes in the XML
+            import re
+            embed_pattern = r'r:embed="([^"]+)"'
+            matches = re.findall(embed_pattern, element_str)
+            embed_ids.extend(matches)
+
+            # Also look for embed attributes without namespace prefix
+            embed_pattern2 = r'embed="([^"]+)"'
+            matches2 = re.findall(embed_pattern2, element_str)
+            embed_ids.extend(matches2)
+
+        except Exception as e:
+            print(f"DEBUG: Error extracting embed IDs: {e}")
+
+        return embed_ids
+
+    def _get_image_extension(self, image_data: bytes) -> str:
+        """Determine image file extension from binary data"""
+        if image_data.startswith(b'\x89PNG'):
+            return 'png'
+        elif image_data.startswith(b'\xff\xd8\xff'):
+            return 'jpeg'
+        elif image_data.startswith(b'GIF'):
+            return 'gif'
+        elif image_data.startswith(b'BM'):
+            return 'bmp'
+        else:
+            return 'png'  # default fallback
+
+    def _get_docx_context(self, paragraphs, current_idx: int) -> str:
+        """Extract text context around the current paragraph position"""
+        context_range = 2  # Look 2 paragraphs before and after
+        start_idx = max(0, current_idx - context_range)
+        end_idx = min(len(paragraphs), current_idx + context_range + 1)
+
+        context_parts = []
+        for i in range(start_idx, end_idx):
+            if i < len(paragraphs):
+                text = paragraphs[i].text.strip()
+                if text and len(text) > 3:  # Only include meaningful text
+                    context_parts.append(text)
+
+        context = ' '.join(context_parts)
+        return context[:200] if context else None  # Limit context length
+
+    def _estimate_content_position(self, paragraphs, current_idx: int) -> int:
+        """Estimate character position in the overall document content"""
+        position = 0
+        for i in range(current_idx):
+            if i < len(paragraphs):
+                position += len(paragraphs[i].text) + 1  # +1 for newline
+        return position
 
     def _extract_from_pptx(self, file_path: Path, output_folder: Path) -> List[ImageInfo]:
         """Extract images from PPTX files"""

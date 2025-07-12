@@ -7,6 +7,12 @@ class ImageInfo(BaseModel):
     url: str
     width: Optional[int] = None
     height: Optional[int] = None
+    # New positioning fields
+    page_number: Optional[int] = None
+    position_x: Optional[float] = None
+    position_y: Optional[float] = None
+    position_in_content: Optional[int] = None  # Character position in extracted text
+    content_context: Optional[str] = None  # Surrounding text for positioning
 
 
 class ConvertRequest(BaseModel):
