@@ -124,43 +124,14 @@ async def upload_file(
             temp_file_path = temp_file.name
 
         try:
-            # Convert using MarkItDown
-            result = services.md.convert(temp_file_path)
-
-            # Extract images from the file
-            images = services.image_extractor.extract_images_from_file(temp_file_path, filename)
-
-            # Ensure the content is properly encoded as UTF-8
-            content = result.text_content
-            if isinstance(content, bytes):
-                content = content.decode('utf-8', errors='replace')
-
-            # Enhance heading detection for Word documents and other formats
-            content = services._enhance_heading_detection(content, temp_file_path)
-
-            # Extract hyperlinks from PDF files
-            if Path(file.filename or "").suffix.lower() == '.pdf':
-                pdf_hyperlinks = services._extract_pdf_hyperlinks(temp_file_path)
-                content = services._integrate_pdf_hyperlinks(content, pdf_hyperlinks)
-
-                # Apply manual hyperlinks for cases where automatic extraction fails
-                content = services._apply_manual_hyperlinks(content, temp_file_path)
-
-            # Integrate images into the markdown content
-            content = services._integrate_images_into_markdown(content, images)
-
-            # Add page numbers to the content if applicable
-            content = services._add_page_numbers_to_markdown(content, temp_file_path, create_pages)
-
-            # Convert hyperlinks to Markdown format (skip for PDFs since we already handled them)
-            if Path(file.filename or "").suffix.lower() != '.pdf':
-                content = services._convert_hyperlinks_to_markdown(content)
+            # Convert using the updated conversion function that includes base64 cleanup
+            convert_result = await services.convert_file(temp_file_path, create_pages)
 
             return UploadResponse(
                 filename=filename,
-                content=content,
+                content=convert_result.content,
                 file_size=file_size,
-                images=images
+                images=convert_result.images
             )
 
         finally:

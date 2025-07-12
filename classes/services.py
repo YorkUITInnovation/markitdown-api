@@ -2,6 +2,7 @@ import requests
 import tempfile
 import os
 import re
+import base64
 from urllib.parse import urlparse
 from pathlib import Path
 from markitdown import MarkItDown
@@ -9,6 +10,7 @@ from fastapi import HTTPException
 from classes import ConvertResponse
 from classes.image_extractor import ImageExtractor
 from classes.scheduler import ImageCleanupScheduler
+from classes.models import ImageInfo
 
 # Initialize MarkItDown and ImageExtractor
 md = MarkItDown()
@@ -540,6 +542,319 @@ def _integrate_images_into_markdown(content: str, images: list) -> str:
 
     return '\n'.join(processed_lines)
 
+def _convert_base64_images_to_files(content: str, document_name: str) -> tuple[str, list[ImageInfo]]:
+    """
+    Detect base64 images in markdown content, convert them to image files,
+    and replace them with links to the saved files.
+
+    Special handling: If image is in a header/top section, place it at the very top.
+
+    Returns: (updated_content, list_of_created_images)
+    """
+    if not content:
+        return content, []
+
+    # Multiple patterns to catch different base64 image formats
+    base64_patterns = [
+        # Standard markdown: ![alt](data:image/type;base64,...)
+        r'!\[([^\]]*)\]\(data:image/([^;]+);base64,([^)]+)\)',
+        # HTML img tags: <img src="data:image/type;base64,..." alt="..." />
+        r'<img[^>]*src=["\']data:image/([^;]+);base64,([^"\']+)["\'][^>]*(?:alt=["\']([^"\']*)["\'])?[^>]*/??>',
+        # Variations with spaces or different formatting
+        r'!\[([^\]]*)\]\(\s*data:image/([^;]+);\s*base64\s*,\s*([^)]+)\s*\)',
+    ]
+
+    all_matches = []
+
+    # Collect all matches from all patterns
+    for pattern_idx, pattern in enumerate(base64_patterns):
+        matches = list(re.finditer(pattern, content, re.IGNORECASE))
+        for match in matches:
+            all_matches.append((pattern_idx, match))
+
+    if not all_matches:
+        return content, []
+
+    # Sort matches by position (reverse order for replacement)
+    all_matches.sort(key=lambda x: x[1].start(), reverse=True)
+
+    created_images = []
+    updated_content = content
+    header_images = []  # Track images that should go to the top
+
+    lines = content.split('\n')
+
+    # Process matches in reverse order to maintain string positions
+    for match_idx, (pattern_idx, match) in enumerate(all_matches):
+        try:
+            # Extract data based on pattern type
+            if pattern_idx == 0:  # Standard markdown pattern
+                alt_text = match.group(1) or f"image_{match_idx + 1}"
+                image_type = match.group(2)
+                base64_data = match.group(3)
+            elif pattern_idx == 1:  # HTML img tag pattern
+                image_type = match.group(1)
+                base64_data = match.group(2)
+                alt_text = match.group(3) if len(match.groups()) > 2 and match.group(3) else f"image_{match_idx + 1}"
+            else:  # Pattern with spaces
+                alt_text = match.group(1) or f"image_{match_idx + 1}"
+                image_type = match.group(2)
+                base64_data = match.group(3)
+
+            # Clean up base64 data (remove any whitespace)
+            base64_data = re.sub(r'\s+', '', base64_data)
+
+            # Validate base64 data length (basic check)
+            if len(base64_data) < 10:
+                print(f"WARNING: Base64 data too short for image {match_idx + 1}, skipping")
+                continue
+
+            # Decode base64 data
+            try:
+                image_data = base64.b64decode(base64_data)
+            except Exception as decode_error:
+                print(f"ERROR: Failed to decode base64 for image {match_idx + 1}: {decode_error}")
+                # Remove the invalid base64 image from content
+                start, end = match.span()
+                updated_content = updated_content[:start] + updated_content[end:]
+                continue
+
+            # Validate image data
+            if len(image_data) < 100:  # Too small to be a real image
+                print(f"WARNING: Decoded image data too small for image {match_idx + 1}, removing")
+                start, end = match.span()
+                updated_content = updated_content[:start] + updated_content[end:]
+                continue
+
+            # Create filename
+            # Clean alt text for filename use
+            clean_alt = re.sub(r'[^\w\s-]', '', alt_text.strip())
+            clean_alt = re.sub(r'\s+', '_', clean_alt)
+            if not clean_alt or clean_alt == '_':
+                clean_alt = f"image_{match_idx + 1}"
+
+            filename = f"{clean_alt}.{image_type}"
+            # Clean filename to be filesystem-safe
+            filename = re.sub(r'[<>:"/\\|?*]', '_', filename)
+
+            # Ensure directory exists before creating folder
+            image_extractor._ensure_images_dir_exists()
+
+            # Create document folder for images
+            document_folder = image_extractor._create_document_folder(document_name)
+            image_path = document_folder / filename
+
+            # Save the image file
+            with open(image_path, 'wb') as f:
+                f.write(image_data)
+
+            # Verify the saved file
+            if not image_path.exists() or image_path.stat().st_size == 0:
+                print(f"ERROR: Failed to save image {filename}")
+                start, end = match.span()
+                updated_content = updated_content[:start] + updated_content[end:]
+                continue
+
+            # Get image dimensions
+            try:
+                from PIL import Image
+                with Image.open(image_path) as img_obj:
+                    width, height = img_obj.size
+                    print(f"DEBUG: Successfully saved image {filename} ({width}x{height})")
+            except Exception as img_error:
+                print(f"WARNING: Could not read image dimensions for {filename}: {img_error}")
+                width, height = None, None
+
+            # Create image info
+            image_info = ImageInfo(
+                filename=filename,
+                url=f"{image_extractor.base_url}/images/{document_folder.name}/{filename}",
+                width=width,
+                height=height
+            )
+            created_images.append(image_info)
+
+            # Check if this image is in a header/top section
+            match_start = match.start()
+
+            # Find which line this match is on
+            char_count = 0
+            line_number = 0
+            for line_idx, line in enumerate(lines):
+                if char_count + len(line) + 1 > match_start:  # +1 for newline
+                    line_number = line_idx
+                    break
+                char_count += len(line) + 1
+
+            # Check if image is in header section
+            is_in_header = False
+
+            # Method 1: Image is in the first few lines
+            if line_number < 5:
+                is_in_header = True
+                print(f"DEBUG: Image {filename} found in early lines (line {line_number})")
+
+            # Method 2: Image is before the first substantial content block
+            else:
+                # Look for first substantial content (paragraph with multiple sentences)
+                first_content_line = None
+                for idx, line in enumerate(lines):
+                    stripped = line.strip()
+                    if (stripped and
+                        not stripped.startswith('#') and
+                        not stripped.startswith('!') and
+                        '.' in stripped and
+                        len(stripped.split()) > 10):  # Substantial content
+                        first_content_line = idx
+                        break
+
+                if first_content_line and line_number < first_content_line:
+                    is_in_header = True
+                    print(f"DEBUG: Image {filename} found before main content (line {line_number} < {first_content_line})")
+
+            # Method 3: Image is within or immediately after a heading
+            if not is_in_header and line_number > 0:
+                # Check current and nearby lines for headings
+                check_range = range(max(0, line_number - 2), min(len(lines), line_number + 3))
+                for check_idx in check_range:
+                    if check_idx < len(lines) and lines[check_idx].strip().startswith('#'):
+                        is_in_header = True
+                        print(f"DEBUG: Image {filename} found near heading at line {check_idx}")
+                        break
+
+            # Replace the base64 image
+            start, end = match.span()
+
+            if is_in_header:
+                # Mark this image to be moved to top
+                header_images.append(image_info)
+                # Remove the base64 image from its current position
+                replacement = ""  # Remove completely, will be added to top
+                print(f"DEBUG: Marking image {filename} for header placement")
+            else:
+                # Replace with normal image link
+                replacement = f"![{alt_text}]({image_info.url})"
+                print(f"DEBUG: Replacing image {filename} in place")
+
+            updated_content = updated_content[:start] + replacement + updated_content[end:]
+
+        except Exception as e:
+            print(f"Error converting base64 image {match_idx + 1}: {e}")
+            # Remove the problematic base64 image from content
+            try:
+                start, end = match.span()
+                updated_content = updated_content[:start] + updated_content[end:]
+                print(f"DEBUG: Removed problematic base64 image from content")
+            except:
+                pass
+            continue
+
+    # If we have header images, place them at the very top
+    if header_images:
+        lines = updated_content.split('\n')
+
+        # Find the best position for header images
+        insert_position = 0
+
+        # Skip any existing title/heading at the very top
+        if lines and lines[0].strip().startswith('#'):
+            insert_position = 1
+            # Also skip any empty lines after the title
+            while (insert_position < len(lines) and
+                   lines[insert_position].strip() == ''):
+                insert_position += 1
+
+        # Create the header images section
+        header_section = []
+        for img in header_images:
+            header_section.append(f"![{img.filename}]({img.url})")
+            header_section.append("")  # Add spacing
+
+        # Insert header images at the determined position
+        lines = lines[:insert_position] + header_section + lines[insert_position:]
+        updated_content = '\n'.join(lines)
+
+        print(f"DEBUG: Placed {len(header_images)} header images at position {insert_position}")
+
+    return updated_content, created_images
+
+
+def _remove_remaining_base64_images(content: str) -> str:
+    """
+    Remove any remaining base64 images from content that couldn't be converted.
+    This is a cleanup function to ensure no base64 data remains in the final output.
+    SURGICAL VERSION - removes only base64 parts while preserving text content.
+    """
+    if not content:
+        return content
+
+    original_content = content
+    print(f"DEBUG: Starting surgical base64 cleanup...")
+
+    # PASS 1: Remove base64 image patterns while preserving text on the same line
+    base64_patterns = [
+        r'!\[[^\]]*\]\([^)]*base64[^)]*\)',  # Any image with base64
+        r'!\[[^\]]*\]\(data:[^)]+\)',         # Any image with data: protocol
+        r'<img[^>]*src=["\'][^"\']*base64[^"\']*["\'][^>]*>',  # HTML img with base64
+        r'data:image/[^;,\s]+[;,][^)\s]*',    # Any data:image URL
+        r'!\[[^\]]*\]\([^)]{150,}\)',         # Very long image URLs (likely base64)
+    ]
+
+    removed_count = 0
+    for pattern in base64_patterns:
+        matches = list(re.finditer(pattern, content, re.IGNORECASE | re.DOTALL))
+        if matches:
+            print(f"DEBUG: Pass 1 - Found {len(matches)} matches for pattern: {pattern[:50]}...")
+            for match in reversed(matches):
+                matched_text = match.group(0)
+                print(f"DEBUG: Removing base64 part: {matched_text[:100]}...")
+                start, end = match.span()
+                # Remove only the base64 image part, not the entire line
+                content = content[:start] + content[end:]
+                removed_count += 1
+
+    print(f"DEBUG: Pass 1 - Removed {removed_count} base64 image patterns")
+
+    # PASS 2: Clean up any remaining suspicious base64 strings (more targeted)
+    suspicious_patterns = [
+        r'base64,[A-Za-z0-9+/=]{20,}',  # base64 data chunks
+        r';base64,[A-Za-z0-9+/=]+',     # base64 with semicolon prefix
+    ]
+
+    for pattern in suspicious_patterns:
+        matches = list(re.finditer(pattern, content, re.IGNORECASE))
+        if matches:
+            print(f"DEBUG: Pass 2 - Found {len(matches)} suspicious base64 strings")
+            for match in reversed(matches):
+                matched_text = match.group(0)
+                print(f"DEBUG: Removing suspicious string: {matched_text[:50]}...")
+                start, end = match.span()
+                content = content[:start] + content[end:]
+
+    # PASS 3: Clean up formatting issues left by removals
+    # Remove empty parentheses left by removed images: ![text]()
+    content = re.sub(r'!\[[^\]]*\]\(\s*\)', '', content)
+
+    # Clean up excessive whitespace
+    content = re.sub(r'\n\s*\n\s*\n+', '\n\n', content)  # Collapse multiple empty lines
+    content = re.sub(r'^\s*\n+', '', content)  # Remove leading empty lines
+    content = re.sub(r'\n+\s*$', '\n', content)  # Remove trailing empty lines
+    content = content.strip()  # Remove leading/trailing whitespace
+
+    if content != original_content:
+        print(f"DEBUG: Successfully cleaned content - removed base64 parts while preserving text")
+
+        # Final verification - check if any base64 strings remain
+        if 'base64' in content.lower():
+            print(f"WARNING: base64 still found in content after cleanup!")
+            # Show what remains for debugging
+            lines = content.split('\n')
+            for i, line in enumerate(lines):
+                if 'base64' in line.lower():
+                    print(f"DEBUG: Remaining base64 on line {i+1}: {line[:100]}...")
+
+    return content
+
 async def convert_url(url: str, create_pages: bool = True) -> ConvertResponse:
     """Convert a URL to markdown"""
     try:
@@ -562,13 +877,16 @@ async def convert_url(url: str, create_pages: bool = True) -> ConvertResponse:
             # Convert using MarkItDown
             result = md.convert(temp_file_path)
 
-            # Extract images from the file
-            images = image_extractor.extract_images_from_file(temp_file_path, filename)
-
             # Ensure the content is properly encoded as UTF-8
             content = result.text_content
             if isinstance(content, bytes):
                 content = content.decode('utf-8', errors='replace')
+
+            # IMMEDIATE base64 cleanup - remove any base64 images created by MarkItDown
+            content = _remove_remaining_base64_images(content)
+
+            # Extract images from the file
+            images = image_extractor.extract_images_from_file(temp_file_path, filename)
 
             # Enhance heading detection for Word documents and other formats
             content = _enhance_heading_detection(content, temp_file_path)
@@ -581,6 +899,13 @@ async def convert_url(url: str, create_pages: bool = True) -> ConvertResponse:
 
             # Convert hyperlinks to Markdown format
             content = _convert_hyperlinks_to_markdown(content)
+
+            # Convert base64 images to files and update content
+            content, base64_images = _convert_base64_images_to_files(content, filename)
+            images.extend(base64_images)  # Add converted base64 images to the list
+
+            # Final cleanup: Remove any remaining base64 images that couldn't be converted
+            content = _remove_remaining_base64_images(content)
 
             return ConvertResponse(
                 filename=filename,
@@ -611,13 +936,16 @@ async def convert_file(file_path: str, create_pages: bool = True) -> ConvertResp
         # Convert using MarkItDown
         result = md.convert(file_path)
 
-        # Extract images from the file
-        images = image_extractor.extract_images_from_file(file_path, filename)
-
         # Ensure the content is properly encoded as UTF-8
         content = result.text_content
         if isinstance(content, bytes):
             content = content.decode('utf-8', errors='replace')
+
+        # IMMEDIATE base64 cleanup - remove any base64 images created by MarkItDown
+        content = _remove_remaining_base64_images(content)
+
+        # Extract images from the file
+        images = image_extractor.extract_images_from_file(file_path, filename)
 
         # Enhance heading detection for Word documents and other formats
         content = _enhance_heading_detection(content, file_path)
@@ -639,6 +967,13 @@ async def convert_file(file_path: str, create_pages: bool = True) -> ConvertResp
         # Convert hyperlinks to Markdown format (skip for PDFs since we already handled them)
         if path_obj.suffix.lower() != '.pdf':
             content = _convert_hyperlinks_to_markdown(content)
+
+        # Convert base64 images to files and update content
+        content, base64_images = _convert_base64_images_to_files(content, filename)
+        images.extend(base64_images)  # Add converted base64 images to the list
+
+        # Final cleanup: Remove any remaining base64 images that couldn't be converted
+        content = _remove_remaining_base64_images(content)
 
         return ConvertResponse(
             filename=filename,
