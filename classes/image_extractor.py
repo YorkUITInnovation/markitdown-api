@@ -44,11 +44,17 @@ class ImageExtractor:
 
     def extract_images_from_file(self, file_path: str, document_name: str) -> List[ImageInfo]:
         """Extract images from a file based on its extension"""
+        print(f"DEBUG: ImageExtractor.extract_images_from_file called with:")
+        print(f"DEBUG: - file_path: {file_path}")
+        print(f"DEBUG: - document_name: {document_name}")
+
         # Ensure directory exists before extraction
         self._ensure_images_dir_exists()
 
         file_path = Path(file_path)
         document_folder = self._create_document_folder(document_name)
+
+        print(f"DEBUG: Created document folder: {document_folder}")
 
         if file_path.suffix.lower() == '.pdf':
             return self._extract_from_pdf(file_path, document_folder)
@@ -199,15 +205,19 @@ class ImageExtractor:
 
                                             # Determine file extension from image data
                                             extension = self._get_image_extension(image_data)
-                                            filename = f"image_{image_count}.{extension}"
-                                            image_path = output_folder / filename
+                                            temp_filename = f"image_{image_count}.{extension}"
+                                            temp_image_path = output_folder / temp_filename
 
-                                            with open(image_path, 'wb') as f:
+                                            with open(temp_image_path, 'wb') as f:
                                                 f.write(image_data)
+
+                                            # Convert to PNG and cleanup original
+                                            final_image_path = self._convert_to_png_and_cleanup(temp_image_path)
+                                            final_filename = final_image_path.name
 
                                             # Get image dimensions
                                             try:
-                                                with Image.open(image_path) as img_obj:
+                                                with Image.open(final_image_path) as img_obj:
                                                     width, height = img_obj.size
                                             except:
                                                 width, height = None, None
@@ -219,15 +229,15 @@ class ImageExtractor:
                                             position_in_content = self._estimate_content_position(doc.paragraphs, paragraph_idx)
 
                                             images.append(ImageInfo(
-                                                filename=filename,
-                                                url=f"{self.base_url}/images/{output_folder.name}/{filename}",
+                                                filename=final_filename,
+                                                url=f"{self.base_url}/images/{output_folder.name}/{final_filename}",
                                                 width=width,
                                                 height=height,
                                                 position_in_content=position_in_content,
                                                 content_context=content_context
                                             ))
 
-                                            print(f"DEBUG: Found unique image {filename} at paragraph {paragraph_idx}, context: {content_context[:50] if content_context else 'None'}...")
+                                            print(f"DEBUG: Found unique image {final_filename} at paragraph {paragraph_idx}, context: {content_context[:50] if content_context else 'None'}...")
                         except Exception as e:
                             print(f"DEBUG: Error processing run in paragraph {paragraph_idx}: {e}")
                             continue
@@ -241,22 +251,26 @@ class ImageExtractor:
                         try:
                             processed_rels.add(rel.rId)
                             image_data = rel.target_part.blob
-                            filename = f"image_{len(images) + 1}.{rel.target_ref.split('.')[-1]}"
-                            image_path = output_folder / filename
+                            temp_filename = f"image_{len(images) + 1}.{rel.target_ref.split('.')[-1]}"
+                            temp_image_path = output_folder / temp_filename
 
-                            with open(image_path, 'wb') as f:
+                            with open(temp_image_path, 'wb') as f:
                                 f.write(image_data)
+
+                            # Convert to PNG and cleanup original
+                            final_image_path = self._convert_to_png_and_cleanup(temp_image_path)
+                            final_filename = final_image_path.name
 
                             # Get image dimensions
                             try:
-                                with Image.open(image_path) as img_obj:
+                                with Image.open(final_image_path) as img_obj:
                                     width, height = img_obj.size
                             except:
                                 width, height = None, None
 
                             images.append(ImageInfo(
-                                filename=filename,
-                                url=f"{self.base_url}/images/{output_folder.name}/{filename}",
+                                filename=final_filename,
+                                url=f"{self.base_url}/images/{output_folder.name}/{final_filename}",
                                 width=width,
                                 height=height
                             ))
@@ -339,21 +353,25 @@ class ImageExtractor:
                         filename = Path(file_info.filename).name
                         if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff')):
                             image_data = zip_ref.read(file_info.filename)
-                            image_path = output_folder / filename
+                            temp_image_path = output_folder / filename
 
-                            with open(image_path, 'wb') as f:
+                            with open(temp_image_path, 'wb') as f:
                                 f.write(image_data)
+
+                            # Convert to PNG and cleanup original
+                            final_image_path = self._convert_to_png_and_cleanup(temp_image_path)
+                            final_filename = final_image_path.name
 
                             # Get image dimensions
                             try:
-                                with Image.open(image_path) as img_obj:
+                                with Image.open(final_image_path) as img_obj:
                                     width, height = img_obj.size
                             except:
                                 width, height = None, None
 
                             images.append(ImageInfo(
-                                filename=filename,
-                                url=f"{self.base_url}/images/{output_folder.name}/{filename}",
+                                filename=final_filename,
+                                url=f"{self.base_url}/images/{output_folder.name}/{final_filename}",
                                 width=width,
                                 height=height
                             ))
@@ -373,21 +391,25 @@ class ImageExtractor:
                         filename = Path(file_info.filename).name
                         if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff')):
                             image_data = zip_ref.read(file_info.filename)
-                            image_path = output_folder / filename
+                            temp_image_path = output_folder / filename
 
-                            with open(image_path, 'wb') as f:
+                            with open(temp_image_path, 'wb') as f:
                                 f.write(image_data)
+
+                            # Convert to PNG and cleanup original
+                            final_image_path = self._convert_to_png_and_cleanup(temp_image_path)
+                            final_filename = final_image_path.name
 
                             # Get image dimensions
                             try:
-                                with Image.open(image_path) as img_obj:
+                                with Image.open(final_image_path) as img_obj:
                                     width, height = img_obj.size
                             except:
                                 width, height = None, None
 
                             images.append(ImageInfo(
-                                filename=filename,
-                                url=f"{self.base_url}/images/{output_folder.name}/{filename}",
+                                filename=final_filename,
+                                url=f"{self.base_url}/images/{output_folder.name}/{final_filename}",
                                 width=width,
                                 height=height
                             ))
@@ -407,21 +429,25 @@ class ImageExtractor:
                         filename = Path(file_info.filename).name
                         if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff')):
                             image_data = zip_ref.read(file_info.filename)
-                            image_path = output_folder / filename
+                            temp_image_path = output_folder / filename
 
-                            with open(image_path, 'wb') as f:
+                            with open(temp_image_path, 'wb') as f:
                                 f.write(image_data)
+
+                            # Convert to PNG and cleanup original
+                            final_image_path = self._convert_to_png_and_cleanup(temp_image_path)
+                            final_filename = final_image_path.name
 
                             # Get image dimensions
                             try:
-                                with Image.open(image_path) as img_obj:
+                                with Image.open(final_image_path) as img_obj:
                                     width, height = img_obj.size
                             except:
                                 width, height = None, None
 
                             images.append(ImageInfo(
-                                filename=filename,
-                                url=f"{self.base_url}/images/{output_folder.name}/{filename}",
+                                filename=final_filename,
+                                url=f"{self.base_url}/images/{output_folder.name}/{final_filename}",
                                 width=width,
                                 height=height
                             ))
@@ -449,22 +475,26 @@ class ImageExtractor:
             for i, (image_type, base64_data) in enumerate(matches):
                 try:
                     image_data = base64.b64decode(base64_data)
-                    filename = f"embedded_image_{i + 1}.{image_type}"
-                    image_path = output_folder / filename
+                    temp_filename = f"embedded_image_{i + 1}.{image_type}"
+                    temp_image_path = output_folder / temp_filename
 
-                    with open(image_path, 'wb') as f:
+                    with open(temp_image_path, 'wb') as f:
                         f.write(image_data)
+
+                    # Convert to PNG and cleanup original
+                    final_image_path = self._convert_to_png_and_cleanup(temp_image_path)
+                    final_filename = final_image_path.name
 
                     # Get image dimensions
                     try:
-                        with Image.open(image_path) as img_obj:
+                        with Image.open(final_image_path) as img_obj:
                             width, height = img_obj.size
                     except:
                         width, height = None, None
 
                     images.append(ImageInfo(
-                        filename=filename,
-                        url=f"{self.base_url}/images/{output_folder.name}/{filename}",
+                        filename=final_filename,
+                        url=f"{self.base_url}/images/{output_folder.name}/{final_filename}",
                         width=width,
                         height=height
                     ))
@@ -487,23 +517,30 @@ class ImageExtractor:
                         try:
                             image_data = zip_ref.read(file_info.filename)
                             safe_filename = "".join(c for c in filename if c.isalnum() or c in (' ', '-', '_', '.')).rstrip()
-                            image_path = output_folder / safe_filename
+                            temp_image_path = output_folder / safe_filename
 
-                            with open(image_path, 'wb') as f:
+                            with open(temp_image_path, 'wb') as f:
                                 f.write(image_data)
 
-                            # Get image dimensions (skip for SVG)
-                            width, height = None, None
+                            # Convert to PNG and cleanup original (skip SVG files)
                             if not filename.lower().endswith('.svg'):
+                                final_image_path = self._convert_to_png_and_cleanup(temp_image_path)
+                                final_filename = final_image_path.name
+
+                                # Get image dimensions
                                 try:
-                                    with Image.open(image_path) as img_obj:
+                                    with Image.open(final_image_path) as img_obj:
                                         width, height = img_obj.size
                                 except:
-                                    pass
+                                    width, height = None, None
+                            else:
+                                # Keep SVG files as-is (no conversion)
+                                final_filename = safe_filename
+                                width, height = None, None
 
                             images.append(ImageInfo(
-                                filename=safe_filename,
-                                url=f"{self.base_url}/images/{output_folder.name}/{safe_filename}",
+                                filename=final_filename,
+                                url=f"{self.base_url}/images/{output_folder.name}/{final_filename}",
                                 width=width,
                                 height=height
                             ))
@@ -584,3 +621,39 @@ class ImageExtractor:
         except Exception as e:
             print(f"Error calculating size for {folder_path}: {e}")
         return total_size
+
+    def _convert_to_png_and_cleanup(self, image_path: Path) -> Path:
+        """Convert any image format to PNG and delete the original file"""
+        try:
+            # If it's already a PNG, return as-is
+            if image_path.suffix.lower() == '.png':
+                return image_path
+
+            # Create new PNG filename
+            png_path = image_path.with_suffix('.png')
+
+            # Open and convert the image to PNG
+            with Image.open(image_path) as img:
+                # Convert to RGB if necessary (for formats like CMYK)
+                if img.mode in ('RGBA', 'LA', 'P'):
+                    # Keep transparency for formats that support it
+                    img.save(png_path, 'PNG', optimize=True)
+                elif img.mode in ('CMYK', 'YCbCr'):
+                    # Convert CMYK and other modes to RGB first
+                    rgb_img = img.convert('RGB')
+                    rgb_img.save(png_path, 'PNG', optimize=True)
+                else:
+                    # For RGB and other modes, save directly
+                    img.save(png_path, 'PNG', optimize=True)
+
+            # Delete the original file
+            if image_path != png_path and image_path.exists():
+                image_path.unlink()
+                print(f"Converted {image_path.name} to PNG and deleted original")
+
+            return png_path
+
+        except Exception as e:
+            print(f"Error converting {image_path} to PNG: {e}")
+            # If conversion fails, return the original path
+            return image_path

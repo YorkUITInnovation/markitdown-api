@@ -125,7 +125,8 @@ async def upload_file(
 
         try:
             # Convert using the updated conversion function that includes base64 cleanup
-            convert_result = await services.convert_file(temp_file_path, create_pages)
+            # Pass the original filename to ensure proper folder naming
+            convert_result = await services.convert_file(temp_file_path, create_pages, filename)
 
             return UploadResponse(
                 filename=filename,
@@ -134,6 +135,8 @@ async def upload_file(
                 images=convert_result.images
             )
 
+        except Exception as conversion_error:
+            raise HTTPException(status_code=500, detail=f"Error processing uploaded file: {str(conversion_error)}")
         finally:
             # Clean up temporary file
             import os

@@ -208,12 +208,11 @@ def _extract_pdf_hyperlinks(file_path: str) -> dict:
                         'rect': link.get('from', None),
                         'kind': link.get('kind', 'unknown')
                     }
-                    print(f"DEBUG: PyMuPDF found link: {uri} on page {page_num + 1}")
 
         doc.close()
 
     except ImportError:
-        print("DEBUG: PyMuPDF not available, trying other methods...")
+        pass
     except Exception as e:
         print(f"Error extracting hyperlinks with PyMuPDF: {e}")
 
@@ -244,12 +243,11 @@ def _extract_pdf_hyperlinks(file_path: str) -> dict:
                                                 'page': page_num + 1,
                                                 'rect': annotation_obj.get("/Rect", None)
                                             }
-                                            print(f"DEBUG: PyPDF2 found link: {uri} on page {page_num + 1}")
                             except Exception:
                                 continue
 
     except ImportError:
-        print("DEBUG: PyPDF2 not available")
+        pass
     except Exception as e:
         print(f"Error extracting hyperlinks with PyPDF2: {e}")
 
@@ -273,7 +271,6 @@ def _extract_pdf_hyperlinks(file_path: str) -> dict:
                                         'page': page_num + 1,
                                         'link_data': link
                                     }
-                                    print(f"DEBUG: pdfplumber found link: {uri} on page {page_num + 1}")
 
                 # Extract annotations if available
                 if hasattr(page, 'annots'):
@@ -289,24 +286,18 @@ def _extract_pdf_hyperlinks(file_path: str) -> dict:
                                         'page': page_num + 1,
                                         'annotation_data': annot
                                     }
-                                    print(f"DEBUG: pdfplumber annotation found link: {uri} on page {page_num + 1}")
 
     except ImportError:
-        print("DEBUG: pdfplumber not available")
+        pass
     except Exception as e:
         print(f"Error extracting hyperlinks with pdfplumber: {e}")
 
-    print(f"DEBUG: Total hyperlinks extracted: {len(hyperlinks)}")
     return hyperlinks
 
 def _integrate_pdf_hyperlinks(content: str, hyperlinks: dict) -> str:
     """Integrate extracted PDF hyperlinks into the markdown content"""
     if not hyperlinks:
         return content
-
-    print(f"DEBUG: Found {len(hyperlinks)} hyperlinks to integrate")
-    for url in hyperlinks.keys():
-        print(f"DEBUG: URL - {url}")
 
     # Create a clean mapping of terms to URLs
     term_to_url = {}
@@ -318,10 +309,8 @@ def _integrate_pdf_hyperlinks(content: str, hyperlinks: dict) -> str:
         # Look for specific known terms that should be linked
         if "pyrrhus" in url_lower:
             term_to_url["Pyrrhus"] = url_clean
-            print(f"DEBUG: Mapped Pyrrhus -> {url_clean}")
         elif "villegaignon" in url_lower:
             term_to_url["Villegaignon"] = url_clean
-            print(f"DEBUG: Mapped Villegaignon -> {url_clean}")
         else:
             # Try to extract meaningful terms from URL for other cases
             url_parts = url_clean.split('/')
@@ -333,10 +322,7 @@ def _integrate_pdf_hyperlinks(content: str, hyperlinks: dict) -> str:
                         # Check if this term appears in the content
                         if re.search(r'\b' + re.escape(clean_part) + r'\b', content, re.IGNORECASE):
                             term_to_url[clean_part] = url_clean
-                            print(f"DEBUG: Mapped {clean_part} -> {url_clean}")
                             break
-
-    print(f"DEBUG: Final term mapping: {term_to_url}")
 
     # Apply the mappings carefully to avoid nested replacements
     for term, url in term_to_url.items():
@@ -364,9 +350,6 @@ def _integrate_pdf_hyperlinks(content: str, hyperlinks: dict) -> str:
             original_word = match.group(0)
             replacement = f'[{original_word}]({url})'
             content = content[:start] + replacement + content[end:]
-
-            print(f"DEBUG: Replaced '{original_word}' with '{replacement}'")
-            break  # Only replace the first occurrence to avoid duplicates
 
     return content
 
@@ -672,9 +655,10 @@ def _integrate_images_with_advanced_positioning(content: str, images: list, file
 
             # Re-analyze the PDF to get detailed text and image positioning
             pdf_doc = fitz.open(file_path)
-            content_with_positions = _analyze_pdf_layout(pdf_doc, content, images)
+            # Note: _analyze_pdf_layout function not implemented yet
+            # content_with_positions = _analyze_pdf_layout(pdf_doc, content, images)
             pdf_doc.close()
-            return content_with_positions
+            # return content_with_positions
 
         except Exception as e:
             print(f"Advanced positioning failed, using fallback: {e}")
@@ -697,8 +681,6 @@ def _integrate_docx_images_by_position(content: str, images: list) -> str:
 
     # Sort positioned images by their content position
     positioned_images.sort(key=lambda img: img.position_in_content)
-
-    print(f"DEBUG: Processing {len(positioned_images)} positioned images and {len(unpositioned_images)} unpositioned images")
 
     if not positioned_images:
         # Fall back to context matching if no position data
@@ -731,10 +713,6 @@ def _integrate_docx_images_by_position(content: str, images: list) -> str:
         # Adjust insertion position based on content context
         final_line_idx = _find_best_insertion_point(lines, best_line_idx, image)
         insertions.append((final_line_idx, image))
-
-        print(f"DEBUG: Image {image.filename} positioned at character {target_char_pos}, inserting at line {final_line_idx}")
-        if image.content_context:
-            print(f"DEBUG: Context: {image.content_context[:100]}...")
 
     # Sort insertions by line index (reverse order for proper insertion)
     insertions.sort(key=lambda x: x[0], reverse=True)
@@ -844,7 +822,6 @@ def _integrate_images_by_context_matching(content: str, images: list) -> str:
                     ""
                 ])
                 used_images.add(image.filename)
-                print(f"DEBUG: Placed {image.filename} at line {i} based on context match")
                 break  # Only place one image per line
 
     # Add any remaining unplaced images
@@ -959,14 +936,12 @@ def _convert_base64_images_to_files(content: str, document_name: str) -> tuple[s
 
             # Validate base64 data length (basic check)
             if len(base64_data) < 10:
-                print(f"WARNING: Base64 data too short for image {match_idx + 1}, skipping")
                 continue
 
             # Decode base64 data
             try:
                 image_data = base64.b64decode(base64_data)
-            except Exception as decode_error:
-                print(f"ERROR: Failed to decode base64 for image {match_idx + 1}: {decode_error}")
+            except Exception:
                 # Remove the invalid base64 image from content
                 start, end = match.span()
                 updated_content = updated_content[:start] + updated_content[end:]
@@ -974,7 +949,6 @@ def _convert_base64_images_to_files(content: str, document_name: str) -> tuple[s
 
             # Validate image data
             if len(image_data) < 100:  # Too small to be a real image
-                print(f"WARNING: Decoded image data too small for image {match_idx + 1}, removing")
                 start, end = match.span()
                 updated_content = updated_content[:start] + updated_content[end:]
                 continue
@@ -1003,7 +977,6 @@ def _convert_base64_images_to_files(content: str, document_name: str) -> tuple[s
 
             # Verify the saved file
             if not image_path.exists() or image_path.stat().st_size == 0:
-                print(f"ERROR: Failed to save image {filename}")
                 start, end = match.span()
                 updated_content = updated_content[:start] + updated_content[end:]
                 continue
@@ -1013,9 +986,7 @@ def _convert_base64_images_to_files(content: str, document_name: str) -> tuple[s
                 from PIL import Image
                 with Image.open(image_path) as img_obj:
                     width, height = img_obj.size
-                    print(f"DEBUG: Successfully saved image {filename} ({width}x{height})")
-            except Exception as img_error:
-                print(f"WARNING: Could not read image dimensions for {filename}: {img_error}")
+            except Exception:
                 width, height = None, None
 
             # Create image info
@@ -1045,7 +1016,6 @@ def _convert_base64_images_to_files(content: str, document_name: str) -> tuple[s
             # Method 1: Image is in the first few lines
             if line_number < 5:
                 is_in_header = True
-                print(f"DEBUG: Image {filename} found in early lines (line {line_number})")
 
             # Method 2: Image is before the first substantial content block
             else:
@@ -1063,7 +1033,6 @@ def _convert_base64_images_to_files(content: str, document_name: str) -> tuple[s
 
                 if first_content_line and line_number < first_content_line:
                     is_in_header = True
-                    print(f"DEBUG: Image {filename} found before main content (line {line_number} < {first_content_line})")
 
             # Method 3: Image is within or immediately after a heading
             if not is_in_header and line_number > 0:
@@ -1072,7 +1041,6 @@ def _convert_base64_images_to_files(content: str, document_name: str) -> tuple[s
                 for check_idx in check_range:
                     if check_idx < len(lines) and lines[check_idx].strip().startswith('#'):
                         is_in_header = True
-                        print(f"DEBUG: Image {filename} found near heading at line {check_idx}")
                         break
 
             # Replace the base64 image
@@ -1083,21 +1051,17 @@ def _convert_base64_images_to_files(content: str, document_name: str) -> tuple[s
                 header_images.append(image_info)
                 # Remove the base64 image from its current position
                 replacement = ""  # Remove completely, will be added to top
-                print(f"DEBUG: Marking image {filename} for header placement")
             else:
                 # Replace with normal image link
                 replacement = f"![{alt_text}]({image_info.url})"
-                print(f"DEBUG: Replacing image {filename} in place")
 
             updated_content = updated_content[:start] + replacement + updated_content[end:]
 
         except Exception as e:
-            print(f"Error converting base64 image {match_idx + 1}: {e}")
             # Remove the problematic base64 image from content
             try:
                 start, end = match.span()
                 updated_content = updated_content[:start] + updated_content[end:]
-                print(f"DEBUG: Removed problematic base64 image from content")
             except:
                 pass
             continue
@@ -1127,8 +1091,6 @@ def _convert_base64_images_to_files(content: str, document_name: str) -> tuple[s
         lines = lines[:insert_position] + header_section + lines[insert_position:]
         updated_content = '\n'.join(lines)
 
-        print(f"DEBUG: Placed {len(header_images)} header images at position {insert_position}")
-
     return updated_content, created_images
 
 
@@ -1142,7 +1104,6 @@ def _remove_remaining_base64_images(content: str) -> str:
         return content
 
     original_content = content
-    print(f"DEBUG: Starting surgical base64 cleanup...")
 
     # PASS 1: Remove base64 image patterns while preserving text on the same line
     base64_patterns = [
@@ -1153,20 +1114,13 @@ def _remove_remaining_base64_images(content: str) -> str:
         r'!\[[^\]]*\]\([^)]{150,}\)',         # Very long image URLs (likely base64)
     ]
 
-    removed_count = 0
     for pattern in base64_patterns:
         matches = list(re.finditer(pattern, content, re.IGNORECASE | re.DOTALL))
         if matches:
-            print(f"DEBUG: Pass 1 - Found {len(matches)} matches for pattern: {pattern[:50]}...")
             for match in reversed(matches):
-                matched_text = match.group(0)
-                print(f"DEBUG: Removing base64 part: {matched_text[:100]}...")
                 start, end = match.span()
                 # Remove only the base64 image part, not the entire line
                 content = content[:start] + content[end:]
-                removed_count += 1
-
-    print(f"DEBUG: Pass 1 - Removed {removed_count} base64 image patterns")
 
     # PASS 2: Clean up any remaining suspicious base64 strings (more targeted)
     suspicious_patterns = [
@@ -1177,10 +1131,7 @@ def _remove_remaining_base64_images(content: str) -> str:
     for pattern in suspicious_patterns:
         matches = list(re.finditer(pattern, content, re.IGNORECASE))
         if matches:
-            print(f"DEBUG: Pass 2 - Found {len(matches)} suspicious base64 strings")
             for match in reversed(matches):
-                matched_text = match.group(0)
-                print(f"DEBUG: Removing suspicious string: {matched_text[:50]}...")
                 start, end = match.span()
                 content = content[:start] + content[end:]
 
@@ -1193,18 +1144,6 @@ def _remove_remaining_base64_images(content: str) -> str:
     content = re.sub(r'^\s*\n+', '', content)  # Remove leading empty lines
     content = re.sub(r'\n+\s*$', '\n', content)  # Remove trailing empty lines
     content = content.strip()  # Remove leading/trailing whitespace
-
-    if content != original_content:
-        print(f"DEBUG: Successfully cleaned content - removed base64 parts while preserving text")
-
-        # Final verification - check if any base64 strings remain
-        if 'base64' in content.lower():
-            print(f"WARNING: base64 still found in content after cleanup!")
-            # Show what remains for debugging
-            lines = content.split('\n')
-            for i, line in enumerate(lines):
-                if 'base64' in line.lower():
-                    print(f"DEBUG: Remaining base64 on line {i+1}: {line[:100]}...")
 
     return content
 
@@ -1275,16 +1214,22 @@ async def convert_url(url: str, create_pages: bool = True) -> ConvertResponse:
         raise HTTPException(status_code=500, detail=f"Error converting URL: {str(e)}")
 
 
-async def convert_file(file_path: str, create_pages: bool = True) -> ConvertResponse:
+async def convert_file(file_path: str, create_pages: bool = True, original_filename: str = None) -> ConvertResponse:
     """Convert a local file to markdown"""
     try:
         # Check if file exists
         if not os.path.exists(file_path):
             raise HTTPException(status_code=404, detail="File not found")
 
-        # Get filename without extension for display
+        # Always create path_obj for file extension checking
         path_obj = Path(file_path)
-        filename = path_obj.stem
+
+        # Use provided original filename or derive from file path
+        if original_filename:
+            filename = original_filename
+        else:
+            # Get filename without extension for display
+            filename = path_obj.stem
 
         # Convert using MarkItDown
         result = md.convert(file_path)
@@ -1350,7 +1295,10 @@ def get_filename_from_url(url: str, response: requests.Response) -> str:
             # Ensure filename is properly decoded
             if isinstance(filename, bytes):
                 filename = filename.decode('utf-8', errors='replace')
-            return Path(filename).stem
+            # Return just the stem (filename without extension) and ensure it's clean
+            clean_filename = Path(filename).stem
+            if clean_filename and not clean_filename.startswith('tmp'):
+                return clean_filename
 
     # Fallback to URL path
     parsed_url = urlparse(url)
@@ -1358,10 +1306,16 @@ def get_filename_from_url(url: str, response: requests.Response) -> str:
     if path:
         filename = Path(path).name
         if filename:
-            return Path(filename).stem
+            clean_filename = Path(filename).stem
+            # Make sure we don't use temporary file names
+            if clean_filename and not clean_filename.startswith('tmp'):
+                return clean_filename
 
-    # Final fallback
-    return "document"
+    # Final fallback - use a clean document name with timestamp
+    from datetime import datetime
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    fallback_name = f"document_{timestamp}"
+    return fallback_name
 
 def _apply_manual_hyperlinks(content: str, file_path: str = None) -> str:
     """Apply manual hyperlink mappings for specific files or common terms"""
@@ -1397,7 +1351,6 @@ def _apply_manual_hyperlinks(content: str, file_path: str = None) -> str:
     for term, url in manual_mappings.items():
         # First, check if this term already exists as a link in the content
         if f'[{term}](' in content:
-            print(f"DEBUG: Skipping {term} - already exists as a markdown link")
             continue
 
         # Use a simpler approach to find terms that aren't already links
@@ -1419,7 +1372,6 @@ def _apply_manual_hyperlinks(content: str, file_path: str = None) -> str:
                 # Replace only this first occurrence in this section
                 parts[i] = parts[i][:start] + replacement + parts[i][end:]
 
-                print(f"DEBUG: Manual mapping - Replaced '{original_word}' with link to {url}")
                 break  # Only replace the first occurrence of this term
 
         # Reconstruct the content
